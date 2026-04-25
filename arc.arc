@@ -23,13 +23,13 @@
 
 
 (assign %brackets (annotate 'mac
-                    (fn body `(fn (_) ,body))))
+                    (fn args `(fn (_) ,args))))
 
 (assign %braces (annotate 'mac
-                  (fn body `(do ,@body))))
+                  (fn args `(do ,@args))))
 
 (assign do (annotate 'mac
-             (fn args `((fn () ,@args)))))
+             (fn args `(%do ,@args))))
 
 (assign safeset (annotate 'mac
                   (fn (var val)

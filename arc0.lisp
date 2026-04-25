@@ -408,6 +408,8 @@ Handles |...| segments verbatim, allowing special chars in symbol names."
      (ac-qq (cadr s) env))            ; ac-qq builds explicit cons/list code
     ((and (consp s) (arc-sym= (car s) "if"))
      (ac-if (cdr s) env))
+    ((and (consp s) (arc-sym= (car s) "%do"))
+     `(progn ,@(ac-body* (cdr s) env)))
     ((and (consp s) (arc-sym= (car s) "fn"))
      (ac-fn (cadr s) (cddr s) env))
     ((and (consp s) (arc-sym= (car s) "assign"))
