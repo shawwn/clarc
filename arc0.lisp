@@ -463,6 +463,9 @@ Handles |...| segments verbatim, allowing special chars in symbol names."
     ;; Check car for unquote-splicing at level 1
     ((and (= level 1) (consp (car x)) (arc-sym= (caar x) "unquote-splicing"))
      `(append ,(ac (cadar x) env) ,(ac-qq1 1 (cdr x) env)))
+    ;; (unquote-splicing expr) at level > 1 -> wrap, reducing level
+    ((and (> level 1) (arc-sym= (car x) "unquote-splicing"))
+     `(cons ',*arc-uqs-sym* (cons ,(ac-qq1 (1- level) (cadr x) env) nil)))
     ;; Normal cons cell
     (t
      `(cons ,(ac-qq1 level (car x) env)
