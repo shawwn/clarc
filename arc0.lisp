@@ -1200,8 +1200,18 @@ empty-name symbol (`||`) from no token at all."
                 (read-byte urandom-stream))))
 
 (xdef dir  (lambda (name)
-              (mapcar #'namestring
-                      (directory (concatenate 'string name "/*.*")))))
+              (let* ((base (if (or (zerop (length name))
+                                   (eql (char name (1- (length name))) #\/))
+                               name
+                               (concatenate 'string name "/")))
+                     (files (directory (concatenate 'string base "*.*")))
+                     (subdirs (directory (concatenate 'string base "*/"))))
+                (append
+                 (loop for p in files
+                       for n = (file-namestring p)
+                       unless (or (null n) (string= n "")) collect n)
+                 (mapcar (lambda (p) (car (last (pathname-directory p))))
+                         subdirs)))))
 
 (xdef file-exists (lambda (name) (if (probe-file name) name nil)))
 
