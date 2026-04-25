@@ -1187,7 +1187,7 @@ empty-name symbol (`||`) from no token at all."
 ;;;; ============================================================
 
 (xdef rand (lambda (&optional n)
-              (if n (random (coerce n 'double-float))
+              (if n (random n)
                   (random 1.0d0))))
 
 (let ((urandom-stream nil))
