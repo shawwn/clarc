@@ -551,9 +551,11 @@
 
 (mac caselet (var expr . args)
   (let ex (afn (args)
-            (if (no (cdr args)) 
+            (if (no (cdr args))
                 (car args)
-                `(if (is ,var ',(car args))
+                `(if ,(if (acons (car args))
+                          `(in ,var ,@(map [list 'quote _] (car args)))
+                          `(is ,var ',(car args)))
                      ,(cadr args)
                      ,(self (cddr args)))))
     `(let ,var ,expr ,(ex args))))
