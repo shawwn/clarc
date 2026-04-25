@@ -798,6 +798,10 @@
                         :element-type 'character
                         :external-format :latin-1)))
 
+(xdef infile-binary (lambda (f)
+                      (open f :direction :input
+                              :element-type '(unsigned-byte 8))))
+
 (xdef outfile (lambda (f &rest args)
                 (open f :direction :output
                         :element-type 'character
@@ -844,7 +848,8 @@
   (cond
     ((stringp x)    (write-string x port))
     ((characterp x) (write-char x port))
-    ((null x)       nil)                    ; Arc nil displays as nothing? No: disp nil -> ""
+    ((null x)       nil)
+    ((symbolp x)    (write-string (symbol-name x) port))
     (t (write x :stream port :readably nil))))
 
 (defun arc-write-val (x port)
@@ -980,7 +985,7 @@
                         (aref ipv 2) (aref ipv 3)))
            (stream (sb-bsd-sockets:socket-make-stream
                     client :input t :output t
-                    :element-type 'character
+                    :element-type :default
                     :external-format :latin-1
                     :buffering :full))
            (lim (make-instance 'arc-limited-stream
@@ -1045,7 +1050,12 @@
 
 (xdef system
   (lambda (cmd)
-    (sb-ext:run-program "/bin/sh" (list "-c" cmd) :wait t)
+    (let* ((proc (sb-ext:run-program "/bin/sh" (list "-c" cmd)
+                                     :output :stream :wait nil))
+           (out  (sb-ext:process-output proc)))
+      (loop for c = (read-char out nil nil)
+            while c do (write-char c *standard-output*))
+      (sb-ext:process-wait proc))
     nil))
 
 (xdef pipe-from
@@ -1103,6 +1113,15 @@
               (if n (random (coerce n 'double-float))
                   (random 1.0d0))))
 
+(let ((urandom-stream nil))
+  (xdef randb (lambda ()
+                (unless urandom-stream
+                  (setf urandom-stream
+                        (open "/dev/urandom"
+                              :element-type '(unsigned-byte 8)
+                              :direction :input)))
+                (read-byte urandom-stream))))
+
 (xdef dir  (lambda (name)
               (mapcar #'namestring
                       (directory (concatenate 'string name "/*.*")))))
@@ -1118,7 +1137,17 @@
 
 (xdef rmfile (lambda (name) (delete-file name) nil))
 
-(xdef mvfile (lambda (old new) (rename-file old new) nil))
+(xdef mvfile (lambda (old new)
+               ; CL rename-file merges new-name with old's truename, which can
+               ; double directory components and inherit the old extension.
+               ; Avoid both by making new-name absolute and setting type to
+               ; :unspecific (explicitly no extension) when the caller provides none.
+               (let* ((new-p    (pathname new))
+                      (new-typed (make-pathname :defaults new-p
+                                               :type (or (pathname-type new-p) :unspecific)))
+                      (new-abs  (merge-pathnames new-typed *default-pathname-defaults*)))
+                 (rename-file old new-abs))
+               nil))
 
 (xdef bound (lambda (x) (tnil (arc-bound-p x))))
 

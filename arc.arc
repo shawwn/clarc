@@ -774,6 +774,9 @@
   (mac w/infile (var name . body)
     (expander 'infile var name body))
 
+  (mac w/infile-binary (var name . body)
+    (expander 'infile-binary var name body))
+
   (mac w/outfile (var name . body)
     (expander 'outfile var name body))
 
@@ -866,12 +869,11 @@
 (def rand-string (n)
   (let c "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
     (with (nc 62 s (newstring n) i 0)
-      (w/infile str "/dev/urandom"
-        (while (< i n)
-          (let x (readb str)
-             (unless (> x 247)
-               (= (s i) (c (mod x nc)))
-               (++ i)))))
+      (while (< i n)
+        (let x (randb)
+          (unless (> x 247)
+            (= (s i) (c (mod x nc)))
+            (++ i))))
       s)))
 
 (mac forlen (var s . body)
