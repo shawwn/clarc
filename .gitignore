@@ -1,0 +1,8 @@
+/arc/
+*.fasl
+*.fas
+*.lib
+*.o
+*~
+\#*\#
+.DS_Store
