@@ -67,7 +67,7 @@
     (caselet c (s i)
       #\+ (writec #\space)
       #\% (do (when (> (- (len s) i) 2)
-                (writeb (int (cut s (+ i 1) (+ i 3)) 16)))
+                (writec (coerce (int (cut s (+ i 1) (+ i 3)) 16) 'char)))
               (++ i 2))
           (writec c)))))
 

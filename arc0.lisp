@@ -930,8 +930,11 @@
              ((string= tname "num")
               (or (parse-num x) (error "Can't coerce string ~S to num" x)))
              ((string= tname "int")
-              (let ((n (parse-num x)))
-                (if n (round n) (error "Can't coerce string ~S to int" x))))
+              (if radix
+                  (or (ignore-errors (parse-integer x :radix radix))
+                      (error "Can't coerce string ~S to int" x))
+                  (let ((n (parse-num x)))
+                    (if n (round n) (error "Can't coerce string ~S to int" x)))))
              (t (error "Can't coerce string ~S to ~S" x type))))
       ((consp x)
        (cond ((string= tname "string")
