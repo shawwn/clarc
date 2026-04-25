@@ -81,8 +81,9 @@ Change the variables at the top of `news.arc`.
 
 ## Development history
 
-The port was built incrementally; each step is recorded as a handoff
-note in [`docs/agents/handoff/`](docs/agents/handoff/), starting with
+The port was built incrementally; each step is recorded as a
+[handoff](https://news.ycombinator.com/item?id=47581897) note in
+[`docs/agents/handoff/`](docs/agents/handoff/), starting with
 [`2026-04-25-001-arc0-port.md`](docs/agents/handoff/2026-04-25-001-arc0-port.md).
 Read those in order if you want to see how arc0 was bootstrapped, what
 broke along the way, and how each fix was reasoned through.
