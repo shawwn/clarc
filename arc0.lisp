@@ -53,22 +53,32 @@ Backslash escapes the next character."
 
 (defun arc-read-token (stream)
   "Read a bare token (symbol or number) from stream.
-Handles |...| segments verbatim, allowing special chars in symbol names."
-  (with-output-to-string (buf)
-    (loop
-      (let ((c (peek-char nil stream nil nil)))
-        (cond
-          ((null c) (return))
-          ((char= c #\|) (arc-read-vbar-segment stream buf))
-          ((arc-delimiter-p c) (return))
-          (t (write-char (read-char stream) buf)))))))
+Handles |...| segments verbatim, allowing special chars in symbol names.
+Returns (values string had-vbar-p) so the caller can distinguish a real
+empty-name symbol (`||`) from no token at all."
+  (let ((had-vbar nil))
+    (values
+     (with-output-to-string (buf)
+       (loop
+         (let ((c (peek-char nil stream nil nil)))
+           (cond
+             ((null c) (return))
+             ((char= c #\|)
+              (setf had-vbar t)
+              (arc-read-vbar-segment stream buf))
+             ((arc-delimiter-p c) (return))
+             (t (write-char (read-char stream) buf))))))
+     had-vbar)))
 
 (defun arc-intern-token (str)
   "Convert a raw token string to a CL value."
   (cond
     ((string= str "") nil)
     ((string= str "nil") nil)
-    ((string= str "t")   t)
+    ;; Intern t as arc::t (regular bindable symbol) rather than cl:t,
+    ;; so it can be used as a lambda parameter name. ac translates
+    ;; free references back to cl:t at expression position.
+    ((string= str "t")   (intern "t" :arc))
     (t
      ;; Try number first
      (let ((n (ignore-errors
@@ -222,10 +232,12 @@ Handles |...| segments verbatim, allowing special chars in symbol names."
        (error "Unexpected }"))
       (t
        ;; Symbol or number
-       (let ((tok (arc-read-token stream)))
-         (if (string= tok "")
-             (arc-read-1 stream)           ; shouldn't happen
-             (arc-intern-token tok)))))))
+       (multiple-value-bind (tok had-vbar) (arc-read-token stream)
+         (cond
+           ;; Real |...| with an empty content -> the empty-name symbol.
+           ((and (string= tok "") had-vbar) (intern "" :arc))
+           ((string= tok "") (arc-read-1 stream)) ; shouldn't happen
+           (t (arc-intern-token tok))))))))
 
 (defun arc-read (stream &optional (eof-error-p t) eof-value)
   (multiple-value-bind (val eof-p) (arc-read-1 stream)
@@ -397,7 +409,8 @@ Handles |...| segments verbatim, allowing special chars in symbol names."
     ((literal-p s)  s)
     ;; Arc nil/t with preserved case from arc-read
     ((and (symbolp s) (string-equal (symbol-name s) "nil")) nil)
-    ((and (symbolp s) (string-equal (symbol-name s) "t"))   t)
+    ;; Free reference to t -> cl:t; lex-bound t falls through to ac-var-ref
+    ((and (symbolp s) (string-equal (symbol-name s) "t") (not (lex-p s env))) t)
     ((ssyntax-p s) (ac (expand-ssyntax s) env))
     ((symbolp s)   (ac-var-ref s env))
     ((and (consp s) (ssyntax-p (car s)))
