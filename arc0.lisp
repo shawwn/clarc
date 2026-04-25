@@ -5,6 +5,9 @@
   (require :asdf)
   (require :sb-bsd-sockets))
 
+#+sbcl
+(declaim (sb-ext:muffle-conditions cl:style-warning))
+
 (defpackage :arc
   (:use :common-lisp)
   (:export #:arc-boot #:arc-load #:arc-eval #:arc-read #:arc-read-1 #:arc-tl))
@@ -607,6 +610,10 @@
 ;;;; ============================================================
 
 (defun arc-eval (expr)
+  #+sbcl
+  (handler-bind ((style-warning #'muffle-warning))
+    (eval (ac expr nil)))
+  #-sbcl
   (eval (ac expr nil)))
 
 (defun arc-load (filename)
