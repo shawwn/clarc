@@ -5,7 +5,7 @@
 ; need better way of generating strings; too many calls to string
 ;  maybe strings with escape char for evaluation
 ; make foo~bar equiv of foo:~bar (in expand-ssyntax)
-; add sigs of ops defined in ac.scm
+; add sigs of ops defined in arc0.lisp
 ; get hold of error types within arc
 ; does macex have to be defined in scheme instead of using def below?
 ; write disp, read, write in arc
@@ -1445,10 +1445,14 @@
 )
 
 (def load (file)
-  (w/infile f file
-    (w/uniq eof
-      (whiler e (read f eof) eof
-        (eval e)))))
+  (let content (filechars file)
+    (w/instring f (if (is (cut content 0 2) "#!")
+                      (let nl (pos #\newline content)
+                        (if nl (cut content (+ nl 1)) ""))
+                      content)
+      (w/uniq eof
+        (whiler e (read f eof) eof
+          (eval e))))))
 
 (def positive (x)
   (and (number x) (> x 0)))
