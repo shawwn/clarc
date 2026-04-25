@@ -1,4 +1,4 @@
-# clarc6
+# clarc
 
 An Arc-to-Common-Lisp port of [Arc](http://arclanguage.org/) and the
 News web app that powers [Hacker News](https://news.ycombinator.com).
