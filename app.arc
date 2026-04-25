@@ -220,9 +220,8 @@
 (def shash (str)
   (let fname (+ "/tmp/shash" (rand-string 10))
     (w/outfile f fname (disp str f))
-    (let res (tostring (system (+ "openssl dgst -sha1 <" fname)))
-      (do1 (cut res 0 (- (len res) 1))
-           (rmfile fname)))))
+    (do1 (last (tokens (tostring (system (+ "openssl dgst -sha1 <" fname)))))
+         (rmfile fname))))
 
 (= dc-usernames* (table))
 

@@ -857,6 +857,23 @@
     ((stringp x)    (write x :stream port))  ; quoted
     ((characterp x) (write x :stream port))
     ((null x)       (write-string "nil" port))
+    ((eq x t)       (write-string "t" port))
+    ((symbolp x)    (write-string (symbol-name x) port))
+    ((consp x)
+     (write-char #\( port)
+     (arc-write-val (car x) port)
+     (let ((rest (cdr x)))
+       (loop while rest do
+         (cond
+           ((consp rest)
+            (write-char #\space port)
+            (arc-write-val (car rest) port)
+            (setf rest (cdr rest)))
+           (t
+            (write-string " . " port)
+            (arc-write-val rest port)
+            (setf rest nil)))))
+     (write-char #\) port))
     (t (write x :stream port :readably nil))))
 
 (xdef disp (lambda (&rest args)
