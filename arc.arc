@@ -1445,14 +1445,10 @@
 )
 
 (def load (file)
-  (let content (filechars file)
-    (w/instring f (if (is (cut content 0 2) "#!")
-                      (let nl (pos #\newline content)
-                        (if nl (cut content (+ nl 1)) ""))
-                      content)
-      (w/uniq eof
-        (whiler e (read f eof) eof
-          (eval e))))))
+  (w/infile f file
+    (w/uniq eof
+      (whiler e (read f eof) eof
+        (eval e)))))
 
 (def positive (x)
   (and (number x) (> x 0)))

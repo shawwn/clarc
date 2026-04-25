@@ -182,6 +182,10 @@
             (apply #'vector (arc-read-list stream #\))))
            ((or (char= c2 #\t) (char= c2 #\T)) t)
            ((or (char= c2 #\f) (char= c2 #\F)) nil)
+           ;; skip shebangs
+           ((char= c2 #\!)
+            (read-line stream nil)
+            (arc-read-1 stream))
            (t (error "Unknown # syntax: #~C" c2)))))
       ((char= c #\;)
        (arc-skip-comment stream)
