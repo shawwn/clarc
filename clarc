@@ -2,4 +2,4 @@
 DIR="$(cd "$(dirname "$0")" && pwd)"
 exec sbcl --noinform \
      --load "$DIR/arc0.lisp" \
-     --eval "(arc:arc-boot :arc-dir \"${ARC_DIR:-/Users/shawn/ml/arc3.2/}\")"
+     --eval "(arc:arc-boot :arc-dir \"${ARC_DIR:-../arc3.2/}\")"
