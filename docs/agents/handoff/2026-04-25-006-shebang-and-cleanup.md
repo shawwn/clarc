@@ -4,15 +4,9 @@
 
 ### 1. Ignore shebang lines when loading Arc files
 
-Two complementary fixes so that Arc files with a `#!/usr/bin/env clarc` (or similar) first line load without error.
+`#!` is handled as a line-skip case inside `arc-read-1` in `arc0.lisp`, mirroring how the original Racket `ac.scm` handled it in `sread`. When the reader dispatches on `#` and sees `!` as the next character, it calls `read-line` to discard the rest of the line, then recurses to return the next real expression. This means every call path that goes through `arc-read` — `(load "file.arc")`, the REPL, boot-time loading — ignores shebangs automatically with no changes needed anywhere else.
 
-**`aload` in `ac.scm`** (Scheme-level loader used during boot):
-- Modified `aload` to use `peek-bytes` to non-destructively check the first two bytes of the file. If they are `#!`, `read-line` discards the shebang before handing the port to `aload1`.
-
-**`load` in `arc.arc`** (Arc-level loader called from the REPL or other Arc code):
-- The original `load` used `w/infile` + `read` directly, so `#!` hit the reader and produced `Error: Unknown # syntax: #!`.
-- Rewrote `load` to read the whole file as a string via `filechars`, strip the shebang line if `(cut content 0 2)` equals `"#!"` (using `pos` to find the newline), then create a string port with `w/instring` and read normally.
-- This approach avoids any character-unread complexity and is safe for files that legitimately start with `#t`, `#\x`, etc.
+`arc.arc`'s `load` function is unchanged.
 
 ### 2. Delete `ac.scm` and `brackets.scm`
 
@@ -25,19 +19,18 @@ The project was ported from Racket (`ac.scm`) to SBCL (`arc0.lisp`) in session 0
 
 ## Key decisions
 
-- **`filechars` + `w/instring` instead of character-level peeking for `load`**: Peeking one character at a time and trying to "put back" a consumed `#` is not cleanly supported by Arc's port API. Reading the whole file as a string first is simple, correct, and avoids edge cases. Arc files are small so there is no performance concern.
-- **`peek-bytes` for `aload`**: At the Scheme level, Racket's `peek-bytes` is the right primitive — it peeks without consuming, so no put-back is needed. This is a zero-copy check at the start of the port.
+- **Handle `#!` in the reader, not in `load`**: An earlier approach rewrote `arc.arc`'s `load` to read the whole file as a string and strip the shebang before parsing. This was reverted in favour of adding `#!` to the `#`-dispatch table in `arc-read-1`. The reader approach is the right layer: it works for all callers, not just `load`, and matches how the original `ac.scm` did it (`skip-shebang!` was called inside `sread`).
+- **`read-line` + recurse**: Once `#` and `!` are consumed, `(read-line stream nil)` discards the rest of the shebang line and `(arc-read-1 stream)` returns the first real expression. The `nil` suppresses EOF errors on an otherwise-empty file.
 
 ## Files changed this session
 
-- `ac.scm` — `aload`: skip shebang line via `peek-bytes`. (File subsequently deleted.)
-- `arc.arc` — `load`: rewritten to strip shebang via string manipulation before parsing.
+- `arc0.lisp` — `arc-read-1` `#` dispatch: added `#!` case to skip the line and recurse.
 - `arc.arc` line 8 — stale comment updated from `ac.scm` to `arc0.lisp`.
 - `ac.scm` — deleted.
 - `brackets.scm` — deleted.
 
 ## Current state
 
-Arc files with a shebang line can now be loaded via both the boot-time `aload` path and the runtime `(load "file.arc")` path. The repo no longer contains the legacy Racket runtime files.
+Arc files with a shebang line can now be loaded via any call path that goes through `arc-read`. The repo no longer contains the legacy Racket runtime files.
 
 `as.scm` remains but is non-functional (its `require` targets are gone); it can be deleted in a future session if desired.
