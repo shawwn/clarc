@@ -1348,7 +1348,7 @@
 ;;;; Boot
 ;;;; ============================================================
 
-(defun arc-boot (&key arc-dir)
+(defun arc-boot (&key arc-dir files)
   (unless arc-dir
     (setf arc-dir
           (namestring
@@ -1360,8 +1360,12 @@
     (arc-load (merge-pathnames "arc.arc" arc-dir))
     (format t "Loading libs.arc...~%") (force-output)
     (ignore-errors (arc-load (merge-pathnames "libs.arc" arc-dir)))
-    (format t "Arc ready.~%")
-    (arc-tl)))
+    (cond (files
+           (dolist (f files) (arc-load f))
+           (uiop:quit 0))
+          (t
+           (format t "Arc ready.~%")
+           (arc-tl)))))
 
 (eval-when (:load-toplevel :execute)
   (format t "~&arc0: runtime loaded. Call (arc:arc-boot) to start.~%"))
