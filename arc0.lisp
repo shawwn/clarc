@@ -684,6 +684,7 @@
 
 (defun ar-is2 (a b)
   (tnil (or (eql a b)
+            (and (numberp a) (numberp b) (= a b))
             (and (stringp a) (stringp b) (string= a b))
             (and (null a) (null b)))))
 
