@@ -7,7 +7,7 @@
 
 (defpackage :arc
   (:use :common-lisp)
-  (:export #:arc-boot #:arc-load #:arc-eval #:arc-read #:arc-read-1))
+  (:export #:arc-boot #:arc-load #:arc-eval #:arc-read #:arc-read-1 #:arc-tl))
 
 (in-package :arc)
 
@@ -1268,7 +1268,7 @@
 (defvar *arc-last-err* nil)
 
 (defun arc-tl ()
-  (format t "Use (quit) to quit, (tl) to return here after an interrupt.~%")
+  (format t "Use (quit) to quit, (arc:arc-tl) to return here after an interrupt.~%")
   (arc-tl2))
 
 (defun arc-tl2 ()
