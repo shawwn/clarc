@@ -278,7 +278,7 @@
                 (string= (symbol-name x) "++")
                 (string= (symbol-name x) "_")))
        (let ((n (symbol-name x)))
-         (has-ssyntax-char-p n (1- (length n))))))
+         (has-ssyntax-char-p n (- (length n) 2)))))
 
 (defun has-ssyntax-char-p (str i)
   (and (>= i 0)
