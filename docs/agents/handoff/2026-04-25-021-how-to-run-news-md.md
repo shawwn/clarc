@@ -2,7 +2,7 @@
 
 The top-level `how-to-run-news` was the original Arc 3.1 instructions:
 unpack `arc3.1.tar`, run `racket -f as.scm`, etc. None of that applies
-to clarc6, which runs on SBCL via `./clarc`.
+to clarc, which runs on SBCL via `./clarc`.
 
 ## Fix
 

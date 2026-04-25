@@ -3,7 +3,7 @@
 The repo had no top-level README, and `copyright` carried the original
 Arc 3.1 Artistic License 2.0 notice. Shawn emailed Paul Graham asking
 to release Arc under MIT and got the OK, so we relicensed and wrote a
-README that frames clarc6 in the context of dang's HN-on-Common-Lisp
+README that frames clarc in the context of dang's HN-on-Common-Lisp
 migration.
 
 ## Changes
@@ -12,7 +12,7 @@ migration.
   - Intro pointing at the HN announcement
     ([item 44099006](https://news.ycombinator.com/item?id=44099006))
     and Vincent Massol's [Lisp Journey write-up](https://lisp-journey.gitlab.io/blog/hacker-news-now-runs-on-top-of-common-lisp/),
-    framing clarc6 as an independent open-source Arc-on-Common-Lisp
+    framing clarc as an independent open-source Arc-on-Common-Lisp
     runtime in the same spirit as dang's *Clarc*.
   - `## Requirements` hoisted above both run sections (single SBCL
     install line, no duplication).
