@@ -418,4 +418,18 @@ c"
   (test? 1 (if false 2 false 3 (let a 1 a)))
   (test? 0 (if false 1 0)))
 
+(define-test case
+  (let x 10
+    (test? 2 (case x 9 9 10 2 4))
+    (test? 2 (case x 9 9 (10) 2 4))
+    (test? 2 (case x 9 9 (10 20) 2 4)))
+  (let x 'z
+    (test? 9 (case x z 9 10))
+    (test? 7 (case x a 1 b 2 7))
+    (test? 2 (case x a 1 (z) 2 7))
+    (test? 2 (case x a 1 (b z) 2 7)))
+  (withs (n 0 f (fn () (++ n))) ; no multiple eval
+    (test? 'b (case (f) 0 'a 1 'b 'c)))
+  (test? 'b ((fn () (case 2 0 (do) 1 'a 2 'b)))))
+
 (run-tests)
