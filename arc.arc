@@ -22,6 +22,12 @@
 ;  lists of chars
 
 
+(assign %brackets (annotate 'mac
+                    (fn body `(fn (_) ,body))))
+
+(assign %braces (annotate 'mac
+                  (fn body `(do ,@body))))
+
 (assign do (annotate 'mac
              (fn args `((fn () ,@args)))))
 

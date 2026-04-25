@@ -34,7 +34,7 @@
 
 (defun arc-delimiter-p (c)
   (or (arc-whitespace-p c)
-      (member c '(#\( #\) #\[ #\] #\" #\; ))))
+      (member c '(#\( #\) #\[ #\] #\{ #\} #\" #\; ))))
 
 (defun arc-read-vbar-segment (stream buf)
   "Read characters up to a closing |, writing them verbatim to BUF.
@@ -174,7 +174,11 @@ Handles |...| segments verbatim, allowing special chars in symbol names."
       ((char= c #\[)
        (read-char stream)
        (let ((body (arc-read-list stream #\])))
-         (list (intern "fn" :arc) (list (intern "_" :arc)) body)))
+         (cons (intern "%brackets" :arc) body)))
+      ((char= c #\{)
+       (read-char stream)
+       (let ((body (arc-read-list stream #\})))
+         (cons (intern "%braces" :arc) body)))
       ((char= c #\")
        (read-char stream)
        (arc-read-string stream))
@@ -214,6 +218,8 @@ Handles |...| segments verbatim, allowing special chars in symbol names."
        (error "Unexpected )"))
       ((char= c #\])
        (error "Unexpected ]"))
+      ((char= c #\})
+       (error "Unexpected }"))
       (t
        ;; Symbol or number
        (let ((tok (arc-read-token stream)))
