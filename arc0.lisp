@@ -36,13 +36,30 @@
   (or (arc-whitespace-p c)
       (member c '(#\( #\) #\[ #\] #\" #\; ))))
 
+(defun arc-read-vbar-segment (stream buf)
+  "Read characters up to a closing |, writing them verbatim to BUF.
+Backslash escapes the next character."
+  (read-char stream)  ; consume opening |
+  (loop
+    (let ((c (read-char stream nil nil)))
+      (cond
+        ((null c) (error "Unexpected EOF in |...| symbol"))
+        ((char= c #\|) (return))
+        ((char= c #\\)
+         (let ((next (read-char stream nil nil)))
+           (when (null next) (error "Unexpected EOF after \\ in |...| symbol"))
+           (write-char next buf)))
+        (t (write-char c buf))))))
+
 (defun arc-read-token (stream)
-  "Read a bare token (symbol or number) from stream."
+  "Read a bare token (symbol or number) from stream.
+Handles |...| segments verbatim, allowing special chars in symbol names."
   (with-output-to-string (buf)
     (loop
       (let ((c (peek-char nil stream nil nil)))
         (cond
           ((null c) (return))
+          ((char= c #\|) (arc-read-vbar-segment stream buf))
           ((arc-delimiter-p c) (return))
           (t (write-char (read-char stream) buf)))))))
 
@@ -249,7 +266,7 @@
 ;;;; Compiler options
 ;;;; ============================================================
 
-(defvar *arc-atstrings*     nil)
+(defvar *arc-atstrings*     t)
 (defvar *arc-direct-calls*  nil)
 (defvar *arc-explicit-flush* nil)
 
