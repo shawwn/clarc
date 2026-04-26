@@ -35,23 +35,14 @@ something like `193 passed, 0 failed`.
 ```sh
 mkdir -p arc
 echo "myname" > arc/admins
-./klarc
+./news.arc
 ```
 
-At the arc prompt:
-
-```
-arc> (load "news.arc")
-arc> (nsv)
-```
-
-Go to [http://localhost:8080](http://localhost:8080).
+Then go to [http://localhost:8080](http://localhost:8080).
 
 Click on login and create an account called `myname`. You should now
 be logged in as an admin. Manually give at least 10 karma to your
 initial set of users.
-
-Don't worry about "user break" messages when restarting News.
 
 ## Customizing News
 
