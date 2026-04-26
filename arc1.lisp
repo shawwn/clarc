@@ -727,17 +727,12 @@ empty-name symbol (`||`) from no token at all."
 ;;;; ============================================================
 
 (xdef join #'arc-join)
-
 (xdef car #'arc-car)
-
 (xdef cdr #'arc-cdr)
-
 (xdef id #'arc-id)
-
 (xdef is #'arc-is)
 
 (xdef + #'arc-+)
-
 (xdef - #'-)
 (xdef * #'*)
 (xdef / #'/)
@@ -748,10 +743,7 @@ empty-name symbol (`||`) from no token at all."
 (xdef > (&rest args) (pairwise #'arc->2 args))
 (xdef < (&rest args) (pairwise #'arc-<2 args))
 
-(xdef len (x)
-  (cond ((stringp x)    (length x))
-        ((hash-table-p x) (hash-table-count x))
-        (t (length x))))
+(xdef len #'arc-len)
 
 (xdef annotate #'arc-tag)
 (xdef type     #'arc-type)
@@ -768,10 +760,7 @@ empty-name symbol (`||`) from no token at all."
 
 ;;;; ---- Continuations (escape-only) ----
 
-(xdef ccc (f)
-  (let ((tag (gensym "K")))
-    (catch tag
-      (ar-funcall1 f (lambda (x) (throw tag x))))))
+(xdef ccc #'arc-ccc)
 
 ;;;; ============================================================
 ;;;; I/O

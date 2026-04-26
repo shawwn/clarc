@@ -8,6 +8,10 @@
 
 (in-package :arc)
 
+;;;; ============================================================
+;;;; Core primitives
+;;;; ============================================================
+
 (defun arc-join (&optional (a nil) (b nil))
   (cons a b))
 
@@ -100,6 +104,18 @@
                     args)))
     ((arc-list-p (car args)) (apply #'append args))
     (t (apply #'+ args))))
+
+(defun arc-len (x)
+  (cond ((stringp x)    (length x))
+        ((hash-table-p x) (hash-table-count x))
+        (t (length x))))
+
+;;;; ---- Continuations (escape-only) ----
+
+(defun arc-ccc (f)
+  (let ((tag (gensym "K")))
+    (catch tag
+      (ar-funcall1 f (lambda (x) (throw tag x))))))
 
 ;;;; ============================================================
 ;;;; Tagged types
