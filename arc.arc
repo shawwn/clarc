@@ -118,16 +118,6 @@
       `(let ,(car parms) ,(cadr parms) 
          (withs ,(cddr parms) ,@body))))
 
-; Rtm prefers to overload + to do this
-
-(def join args
-  (if (no args)
-      nil
-      (let a (car args) 
-        (if (no a) 
-            (apply join (cdr args))
-            (cons (car a) (apply join (cdr a) (cdr args)))))))
-
 ; Need rfn for use in macro expansions.
 
 (mac rfn (name parms . body)
