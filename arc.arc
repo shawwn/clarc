@@ -1455,8 +1455,20 @@
 (def load (file)
   (w/infile f file
     (w/uniq eof
-      (whiler e (read f eof) eof
-        (eval e)))))
+      (let prev script-file*
+        (= script-file* file)
+        (after
+          (whiler e (read f eof) eof
+            (eval e))
+          (= script-file* prev))))))
+
+; True iff the current file is the toplevel script (last .arc file
+; passed on the klarc command line). Analogous to Python's
+;   if __name__ == "__main__":
+; Use as:
+;   (when (main) (do-toplevel-stuff))
+(def main ()
+  (and main-file* (is script-file* main-file*)))
 
 (def positive (x)
   (and (number x) (> x 0)))

@@ -1,3 +1,5 @@
+#!./klarc
+
 ; News.  2 Sep 06.
 
 ; to run news: (nsv), then go to http://localhost:8080
@@ -2614,4 +2616,6 @@ first asterisk isn't whitespace.
       (each c (dedup (map downcase (trues [uvar _ topcolor] (users))))
         (tr (td c) (tdcolor (hex>color c) (hspace 30)))))))
 
+(when (main)
+  (nsv))
 

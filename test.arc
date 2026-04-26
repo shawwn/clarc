@@ -432,4 +432,5 @@ c"
     (test? 'b (case (f) 0 'a 1 'b 'c)))
   (test? 'b ((fn () (case 2 0 (do) 1 'a 2 'b)))))
 
-(run-tests)
+(when (main)
+  (run-tests))

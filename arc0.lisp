@@ -663,10 +663,15 @@ empty-name symbol (`||`) from no token at all."
   (with-open-file (p filename :direction :input
                               :element-type 'character
                               :external-format :utf-8)
-    (loop
-      (let ((x (arc-read p nil :eof)))
-        (when (eq x :eof) (return))
-        (arc-eval x)))))
+    (let ((path (namestring (truename p)))
+          (prev (arc-global '|script-file*|)))
+      (setf (arc-global '|script-file*|) path)
+      (unwind-protect
+           (loop
+             (let ((x (arc-read p nil :eof)))
+               (when (eq x :eof) (return))
+               (arc-eval x)))
+        (setf (arc-global '|script-file*|) prev)))))
 
 ;;;; ============================================================
 ;;;; Funcall helpers
@@ -1447,6 +1452,9 @@ empty-name symbol (`||`) from no token at all."
     (arc-load (merge-pathnames "arc.arc" arc-dir))
     (arc-vlog "Loading libs.arc...~%")
     (ignore-errors (arc-load (merge-pathnames "libs.arc" arc-dir)))
+    (when files
+      (setf (arc-global '|main-file*|)
+            (namestring (truename (car (last files))))))
     (cond (files
            (dolist (f files) (arc-load f))
            (uiop:quit 0))
