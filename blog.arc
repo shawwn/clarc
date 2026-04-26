@@ -1,4 +1,4 @@
-#!./klarc
+#!./sharc
 
 ; Blog tool example.  20 Jan 08, rev 21 May 09.
 

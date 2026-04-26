@@ -6,7 +6,7 @@ on macOS, `apt install sbcl` on Debian/Ubuntu).
 ```sh
 mkdir -p arc
 echo "myname" > arc/admins
-./klarc
+./sharc
 ```
 
 At the arc prompt:

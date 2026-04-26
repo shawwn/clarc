@@ -1463,7 +1463,7 @@
           (= script-file* prev))))))
 
 ; True iff the current file is the toplevel script (last .arc file
-; passed on the klarc command line). Analogous to Python's
+; passed on the sharc command line). Analogous to Python's
 ;   if __name__ == "__main__":
 ; Use as:
 ;   (when (main) (do-toplevel-stuff))

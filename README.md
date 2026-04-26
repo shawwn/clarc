@@ -1,4 +1,4 @@
-# klarc
+# sharc
 
 An Arc-to-Common-Lisp port of [Arc](http://arclanguage.org/) and the
 News web app that powers [Hacker News](https://news.ycombinator.com).
@@ -66,7 +66,7 @@ Change the variables at the top of `news.arc`.
   `arc0.lisp`, then either runs each given Arc file and exits, or
   drops into the Arc REPL when no files are given (analogue of
   `arc3.2/as.scm`)
-- `klarc` — thin shell wrapper: `exec sbcl --script boot.lisp "$@"`
+- `sharc` — thin shell wrapper: `exec sbcl --script boot.lisp "$@"`
 - `arc.arc`, `libs.arc`, `strings.arc`, `code.arc`, `html.arc`,
   `pprint.arc`, `srv.arc`, `app.arc`, `prompt.arc` — Arc itself,
   built on top of `arc0`

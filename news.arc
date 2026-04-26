@@ -1,4 +1,4 @@
-#!./klarc
+#!./sharc
 
 ; News.  2 Sep 06.
 
