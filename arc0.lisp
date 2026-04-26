@@ -1413,8 +1413,14 @@ empty-name symbol (`||`) from no token at all."
     (sb-debug:map-backtrace
      (lambda (frame)
        (when (and (not stop) (< i count))
+         ;; Print frames under :invert readtable case so mixed-case
+         ;; symbol names (like arc--CAR) come out without |...| escapes.
+         ;; All-lowercase and all-uppercase names still print in their
+         ;; canonical form; only mixed-case ones change.
          (let ((text (with-output-to-string (s)
-                       (let ((*print-pretty* nil))
+                       (let ((*print-pretty* nil)
+                             (*readtable* (copy-readtable *readtable*)))
+                         (setf (readtable-case *readtable*) :invert)
                          (sb-debug::print-frame-call frame s :number nil)))))
            (push (cons i text) frames)
            (incf i)
