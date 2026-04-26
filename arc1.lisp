@@ -13,15 +13,6 @@
 (in-package :arc)
 
 ;;;; ============================================================
-;;;; Arc readtable
-;;;; ============================================================
-
-;;; Symbols used for Arc's quasiquote notation
-(defvar *arc-qq-sym*  (intern "quasiquote"       :arc))
-(defvar *arc-uq-sym*  (intern "unquote"          :arc))
-(defvar *arc-uqs-sym* (intern "unquote-splicing" :arc))
-
-;;;; ============================================================
 ;;;; Arc reader  (custom, to handle : . ! ~ & as symbol chars)
 ;;;; ============================================================
 ;;; CL's package: separator conflicts with Arc ssyntax (foo:bar = compose).
@@ -76,7 +67,7 @@ empty-name symbol (`||`) from no token at all."
     ;; Intern t as arc::t (regular bindable symbol) rather than cl:t,
     ;; so it can be used as a lambda parameter name. ac translates
     ;; free references back to cl:t at expression position.
-    ((string= str "t")   (intern "t" :arc))
+    ((string= str "t")   (arc-sym 't))
     (t
      ;; Try number first
      (let ((n (ignore-errors
@@ -85,7 +76,7 @@ empty-name symbol (`||`) from no token at all."
                         (*readtable* (copy-readtable nil)))
                     (let ((v (read-from-string str)))
                       (if (numberp v) v nil)))))))
-       (or n (intern str :arc))))))
+       (or n (arc-sym str))))))
 
 (defun arc-read-string (stream)
   "Read a double-quoted string, handling backslash escapes."
@@ -184,27 +175,28 @@ empty-name symbol (`||`) from no token at all."
       ((char= c #\[)
        (read-char stream)
        (let ((body (arc-read-list stream #\])))
-         (cons (intern "%brackets" :arc) body)))
+         (cons (arc-sym '%brackets) body)))
       ((char= c #\{)
        (read-char stream)
        (let ((body (arc-read-list stream #\})))
-         (cons (intern "%braces" :arc) body)))
+         (cons (arc-sym '%braces) body)))
       ((char= c #\")
        (read-char stream)
        (arc-read-string stream))
       ((char= c #\')
        (read-char stream)
-       (list (intern "quote" :arc) (arc-read-1 stream)))
+       (list (arc-sym 'quote) (arc-read-1 stream)))
       ((char= c #\`)
        (read-char stream)
-       (list *arc-qq-sym* (arc-read-1 stream)))
+       (list (arc-sym 'quasiquote) (arc-read-1 stream)))
       ((char= c #\,)
        (read-char stream)
        (let ((next (peek-char nil stream nil nil)))
          (if (and next (char= next #\@))
              (progn (read-char stream)
-                    (list *arc-uqs-sym* (arc-read-1 stream)))
-             (list *arc-uq-sym* (arc-read-1 stream)))))
+                    (list (arc-sym 'unquote-splicing)
+                          (arc-read-1 stream)))
+             (list (arc-sym 'unquote) (arc-read-1 stream)))))
       ((char= c #\#)
        (read-char stream)
        (let ((c2 (read-char stream t nil)))
@@ -221,16 +213,16 @@ empty-name symbol (`||`) from no token at all."
             (read-line stream nil)
             (arc-read-1 stream))
            ((char= c2 #\')
-            (list (intern "function" :arc) (arc-read-1 stream)))
+            (list (arc-sym 'function) (arc-read-1 stream)))
            ((char= c2 #\`)
-            (list (intern "quasisyntax" :arc) (arc-read-1 stream)))
+            (list (arc-sym 'quasisyntax) (arc-read-1 stream)))
            ((char= c2 #\,)
             (let ((next (peek-char nil stream nil nil)))
               (if (and next (char= next #\@))
                   (progn (read-char stream)
-                         (list (intern "unsyntax-splicing" :arc)
+                         (list (arc-sym 'unsyntax-splicing)
                                (arc-read-1 stream)))
-                  (list (intern "unsyntax" :arc)
+                  (list (arc-sym 'unsyntax)
                         (arc-read-1 stream)))))
            (t (error "Unknown # syntax: #~C" c2)))))
       ((char= c #\;)
@@ -247,7 +239,7 @@ empty-name symbol (`||`) from no token at all."
        (multiple-value-bind (tok had-vbar) (arc-read-token stream)
          (cond
            ;; Real |...| with an empty content -> the empty-name symbol.
-           ((and (string= tok "") had-vbar) (intern "" :arc))
+           ((and (string= tok "") had-vbar) (arc-sym ""))
            ((string= tok "") (arc-read-1 stream)) ; shouldn't happen
            (t (arc-intern-token tok))))))))
 
@@ -392,7 +384,7 @@ empty-name symbol (`||`) from no token at all."
   (if *arc-atstrings*
       (let ((pos (atpos s 0)))
         (if pos
-            (ac (cons (intern "string" :arc)
+            (ac (cons (arc-sym 'string)
                       (mapcar (lambda (x) (if (stringp x) (unescape-ats x) x))
                               (codestring s)))
                 env)
@@ -418,19 +410,22 @@ empty-name symbol (`||`) from no token at all."
     ((not (consp x)) `',x)
     ;; (quasiquote inner) -> increase level
     ((arc-sym= (car x) "quasiquote")
-     `(cons ',*arc-qq-sym* (cons ,(ac-qq1 (1+ level) (cadr x) env) nil)))
+     `(cons ',(arc-sym 'quasiquote)
+              (cons ,(ac-qq1 (1+ level) (cadr x) env) nil)))
     ;; (unquote expr) at level 1 -> compile expr
     ((and (= level 1) (arc-sym= (car x) "unquote"))
      (ac (cadr x) env))
     ;; (unquote expr) at level > 1 -> wrap, reducing level
     ((arc-sym= (car x) "unquote")
-     `(cons ',*arc-uq-sym* (cons ,(ac-qq1 (1- level) (cadr x) env) nil)))
+     `(cons ',(arc-sym 'unquote)
+              (cons ,(ac-qq1 (1- level) (cadr x) env) nil)))
     ;; Check car for unquote-splicing at level 1
     ((and (= level 1) (consp (car x)) (arc-sym= (caar x) "unquote-splicing"))
      `(append ,(ac (cadar x) env) ,(ac-qq1 1 (cdr x) env)))
     ;; (unquote-splicing expr) at level > 1 -> wrap, reducing level
     ((and (> level 1) (arc-sym= (car x) "unquote-splicing"))
-     `(cons ',*arc-uqs-sym* (cons ,(ac-qq1 (1- level) (cadr x) env) nil)))
+     `(cons ',(arc-sym 'unquote-splicing)
+              (cons ,(ac-qq1 (1- level) (cadr x) env) nil)))
     ;; Normal cons cell
     (t
      `(cons ,(ac-qq1 level (car x) env)
@@ -606,7 +601,7 @@ empty-name symbol (`||`) from no token at all."
 (defvar *arc-gensym-count* 0)
 (defun arc-gensym ()
   (incf *arc-gensym-count*)
-  (intern (format nil "gs~D" *arc-gensym-count*) :arc))
+  (arc-sym (format nil "gs~D" *arc-gensym-count*)))
 
 (xdef uniq #'arc-gensym)
 

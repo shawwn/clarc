@@ -11,6 +11,9 @@
 
 (defun tnil (x) (if x t nil))
 
+(defun arc-sym (name)
+  (intern (if (symbolp name) (arc-sym-key name) name) :arc))
+
 (defun arc-sym= (x name)
   "Case-insensitive comparison of symbol X to string NAME."
   (and (symbolp x) (string-equal (symbol-name x) name)))
