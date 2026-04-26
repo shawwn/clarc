@@ -309,24 +309,6 @@ empty-name symbol (`||`) from no token at all."
 (defvar *arc-explicit-flush* nil)
 
 ;;;; ============================================================
-;;;; Utilities
-;;;; ============================================================
-
-(defun tnil (x) (if x t nil))
-
-(defun arc-sym= (x name)
-  "Case-insensitive comparison of symbol X to string NAME."
-  (and (symbolp x) (string-equal (symbol-name x) name)))
-
-(defun arc-list-p (x) (or (consp x) (null x)))
-
-(defun arc-imap (f l)
-  "map over proper or improper list (like Scheme's imap)."
-  (cond ((consp l) (cons (funcall f (car l)) (arc-imap f (cdr l))))
-        ((null l) nil)
-        (t (funcall f l))))
-
-;;;; ============================================================
 ;;;; ssyntax
 ;;;; ============================================================
 
@@ -559,12 +541,12 @@ empty-name symbol (`||`) from no token at all."
                                    env ra)
                    (ac-complex-args
                     (car args) env
-                    (if is-params `(car ,ra) `(ar-xcar ,ra))
+                    (if is-params `(car ,ra) `(arc-xcar ,ra))
                     nil)))
             (xa (ac-complex-getargs x)))
        (append x (ac-complex-args (cdr args)
                                   (append xa env)
-                                  `(ar-xcdr ,ra)
+                                  `(arc-xcdr ,ra)
                                   is-params))))
     (t (error "Can't understand fn arg list: ~S" args))))
 
@@ -620,14 +602,14 @@ empty-name symbol (`||`) from no token at all."
       ((and (consp fn) (arc-sym= (car fn) "fn"))
        `(,(ac fn env) ,@(mapcar (lambda (x) (ac x env)) args)))
       ((= (length args) 0)
-       `(ar-funcall0 ,(ac fn env)))
+       `(arc-call0 ,(ac fn env)))
       ((= (length args) 1)
-       `(ar-funcall1 ,(ac fn env) ,(ac (car args) env)))
+       `(arc-call1 ,(ac fn env) ,(ac (car args) env)))
       ((= (length args) 2)
-       `(ar-funcall2 ,(ac fn env) ,(ac (car args) env) ,(ac (cadr args) env)))
+       `(arc-call2 ,(ac fn env) ,(ac (car args) env) ,(ac (cadr args) env)))
       ((= (length args) 3)
-       `(ar-funcall3 ,(ac fn env) ,(ac (car args) env)
-                     ,(ac (cadr args) env) ,(ac (caddr args) env)))
+       `(arc-call3 ,(ac fn env) ,(ac (car args) env)
+                   ,(ac (cadr args) env) ,(ac (caddr args) env)))
       (t `(ar-apply ,(ac fn env)
                     (list ,@(mapcar (lambda (x) (ac x env)) args)))))))
 
@@ -689,40 +671,6 @@ empty-name symbol (`||`) from no token at all."
         (setf (arc-global '|script-file*|) prev)))))
 
 ;;;; ============================================================
-;;;; Funcall helpers
-;;;; ============================================================
-
-(defun ar-funcall0 (fn)
-  (if (functionp fn) (funcall fn) (ar-apply fn nil)))
-(defun ar-funcall1 (fn a)
-  (if (functionp fn) (funcall fn a) (ar-apply fn (list a))))
-(defun ar-funcall2 (fn a b)
-  (if (functionp fn) (funcall fn a b) (ar-apply fn (list a b))))
-(defun ar-funcall3 (fn a b c)
-  (if (functionp fn) (funcall fn a b c) (ar-apply fn (list a b c))))
-
-(defun ar-apply (fn args)
-  (cond
-    ((functionp fn)  (apply fn args))
-    ((consp fn)      (nth (car args) fn))
-    ((stringp fn)    (char fn (car args)))
-    ((hash-table-p fn)
-     (let ((v (gethash (car args) fn :arc/missing)))
-       (if (eq v :arc/missing)
-           (if (cdr args) (cadr args) nil)
-           v)))
-    (t (error "Function call on non-function: ~S" fn))))
-
-(defun ar-apply-args (args)
-  (cond
-    ((null args) nil)
-    ((null (cdr args)) (car args))
-    (t (cons (car args) (ar-apply-args (cdr args))))))
-
-(defun ar-xcar (x) (if (null x) nil (car x)))
-(defun ar-xcdr (x) (if (null x) nil (cdr x)))
-
-;;;; ============================================================
 ;;;; Core primitives
 ;;;; ============================================================
 
@@ -752,11 +700,11 @@ empty-name symbol (`||`) from no token at all."
 ;;;; ---- Gensym ----
 
 (defvar *arc-gensym-count* 0)
-(defun ar-gensym ()
+(defun arc-gensym ()
   (incf *arc-gensym-count*)
   (intern (format nil "gs~D" *arc-gensym-count*) :arc))
 
-(xdef uniq #'ar-gensym)
+(xdef uniq #'arc-gensym)
 
 ;;;; ---- Continuations (escape-only) ----
 
@@ -791,9 +739,9 @@ empty-name symbol (`||`) from no token at all."
 (xdef stderr () *error-output*)
 
 (xdef call-w/stdout (port thunk)
-  (let ((*standard-output* port)) (ar-funcall0 thunk)))
+  (let ((*standard-output* port)) (arc-call0 thunk)))
 (xdef call-w/stdin (port thunk)
-  (let ((*standard-input* port)) (ar-funcall0 thunk)))
+  (let ((*standard-input* port)) (arc-call0 thunk)))
 
 (xdef readc (&rest args)
   (let ((c (read-char (if args (car args) *standard-input*) nil nil)))
@@ -1024,7 +972,7 @@ empty-name symbol (`||`) from no token at all."
 (xdef new-thread (f)
   (sb-thread:make-thread
    (lambda ()
-     (handler-case (ar-funcall0 f)
+     (handler-case (arc-call0 f)
        (error (c) (arc-report-error c *error-output*) nil)))
    :name "arc"))
 
@@ -1048,10 +996,10 @@ empty-name symbol (`||`) from no token at all."
 
 (xdef atomic-invoke (f)
   (if (eq sb-thread:*current-thread* *arc-atomic-owner*)
-      (ar-funcall0 f)
+      (arc-call0 f)
       (sb-thread:with-mutex (*arc-mutex*)
         (let ((*arc-atomic-owner* sb-thread:*current-thread*))
-          (ar-funcall0 f)))))
+          (arc-call0 f)))))
 
 ;;;; ============================================================
 ;;;; System calls
@@ -1077,11 +1025,11 @@ empty-name symbol (`||`) from no token at all."
 
 (xdef table (&rest args)
   (let ((h (make-hash-table :test #'equal)))
-    (when args (ar-funcall1 (car args) h))
+    (when args (arc-call1 (car args) h))
     h))
 
 (xdef maptable (fn table)
-  (maphash (lambda (k v) (ar-funcall2 fn k v)) table)
+  (maphash (lambda (k v) (arc-call2 fn k v)) table)
   table)
 
 (xdef sref (obj val idx)
@@ -1098,13 +1046,13 @@ empty-name symbol (`||`) from no token at all."
 ;;;; ============================================================
 
 (xdef protect (during after)
-  (unwind-protect (ar-funcall0 during) (ar-funcall0 after)))
+  (unwind-protect (arc-call0 during) (arc-call0 after)))
 
 (xdef err #'error)
 
 (xdef on-err (errfn f)
-  (handler-case (ar-funcall0 f)
-    (error (c) (ar-funcall1 errfn c))))
+  (handler-case (arc-call0 f)
+    (error (c) (arc-call1 errfn c))))
 
 (xdef details (c) (format nil "~A" c))
 
@@ -1229,8 +1177,7 @@ empty-name symbol (`||`) from no token at all."
 
 ;;;; ---- apply / sig / declare / eval / macex ----
 
-(xdef apply (fn &rest args)
-  (ar-apply fn (ar-apply-args args)))
+(xdef apply #'arc-apply)
 
 (xdef sig *arc-fn-signatures*)
 

@@ -9,6 +9,43 @@
 (in-package :arc)
 
 ;;;; ============================================================
+;;;; Funcall helpers
+;;;; ============================================================
+
+(defun ar-apply-args (args)
+  (cond
+    ((null args) nil)
+    ((null (cdr args)) (car args))
+    (t (cons (car args) (ar-apply-args (cdr args))))))
+
+(defun ar-apply (fn args)
+  (cond
+    ((functionp fn)  (apply fn args))
+    ((consp fn)      (nth (car args) fn))
+    ((stringp fn)    (char fn (car args)))
+    ((hash-table-p fn)
+     (let ((v (gethash (car args) fn :arc/missing)))
+       (if (eq v :arc/missing)
+           (if (cdr args) (cadr args) nil)
+           v)))
+    (t (error "Function call on non-function: ~S" fn))))
+
+(defun arc-apply (fn &rest args)
+  (ar-apply fn (ar-apply-args args)))
+
+(defun arc-call0 (fn)
+  (if (functionp fn) (funcall fn) (ar-apply fn nil)))
+
+(defun arc-call1 (fn a)
+  (if (functionp fn) (funcall fn a) (ar-apply fn (list a))))
+
+(defun arc-call2 (fn a b)
+  (if (functionp fn) (funcall fn a b) (ar-apply fn (list a b))))
+
+(defun arc-call3 (fn a b c)
+  (if (functionp fn) (funcall fn a b c) (ar-apply fn (list a b c))))
+
+;;;; ============================================================
 ;;;; Core primitives
 ;;;; ============================================================
 
@@ -24,6 +61,9 @@
   (cond ((consp x) (cdr x))
         ((null x)  nil)
         (t (error "Can't take cdr of ~S" x))))
+
+(defun arc-xcar (x) (if (null x) nil (car x)))
+(defun arc-xcdr (x) (if (null x) nil (cdr x)))
 
 (defun pairwise (pred lst)
   (cond ((null lst)       t)
@@ -115,7 +155,25 @@
 (defun arc-ccc (f)
   (let ((tag (gensym "K")))
     (catch tag
-      (ar-funcall1 f (lambda (x) (throw tag x))))))
+      (arc-call1 f (lambda (x) (throw tag x))))))
+
+;;;; ============================================================
+;;;; Utilities
+;;;; ============================================================
+
+(defun tnil (x) (if x t nil))
+
+(defun arc-sym= (x name)
+  "Case-insensitive comparison of symbol X to string NAME."
+  (and (symbolp x) (string-equal (symbol-name x) name)))
+
+(defun arc-list-p (x) (or (consp x) (null x)))
+
+(defun arc-imap (f l)
+  "map over proper or improper list (like Scheme's imap)."
+  (cond ((consp l) (cons (funcall f (car l)) (arc-imap f (cdr l))))
+        ((null l) nil)
+        (t (funcall f l))))
 
 ;;;; ============================================================
 ;;;; Tagged types
