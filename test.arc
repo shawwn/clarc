@@ -68,6 +68,22 @@
   (test? false (and true false))
   (test? false (and true true false)))
 
+(define-test identity
+  (test? true (is 'a 'a))
+  (test? false (is 'a "a"))
+  (test? true (is "a" "a"))
+  (test? true (id "a" "a"))
+  (test? true (is (cons nil nil) (cons nil nil)))
+  (test? false (id (cons nil nil) (cons nil nil)))
+  (test? true (is (list 'a) (list 'a)))
+  (test? false (id (list 'a) (list 'a)))
+  (test? true (is (obj) (obj)))
+  (test? false (id (obj) (obj)))
+  (test? true (is (obj a t) (obj a t)))
+  (test? false (id (obj a t) (obj a t)))
+  (test? true (is -0.0 0.0))
+  (test? true (id -0.0 0.0)))
+
 (define-test short
   (test? true (or true (err 'bad)))
   (test? false (and false (err 'bad)))

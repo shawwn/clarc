@@ -741,19 +741,9 @@ empty-name symbol (`||`) from no token at all."
 
 (xdef cdr #'arc-cdr)
 
-(defun pairwise (pred lst)
-  (cond ((null lst)       t)
-        ((null (cdr lst)) t)
-        ((null (funcall pred (car lst) (cadr lst))) nil)
-        (t (pairwise pred (cdr lst)))))
+(xdef id #'arc-id)
 
-(defun ar-is2 (a b)
-  (tnil (or (eql a b)
-            (and (numberp a) (numberp b) (= a b))
-            (and (stringp a) (stringp b) (string= a b))
-            (and (null a) (null b)))))
-
-(xdef is (&rest args) (pairwise #'ar-is2 args))
+(xdef is #'arc-is)
 
 (defun char-or-str-p (x) (or (stringp x) (characterp x)))
 
