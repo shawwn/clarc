@@ -428,9 +428,6 @@ empty-name symbol (`||`) from no token at all."
 (defun literal-p (x)
   (or (eq x t) (characterp x) (stringp x) (numberp x) (null x)))
 
-;;; nil-tree: identity in CL since CL nil = Arc nil
-(defun ac-niltree (x) x)
-
 (defun ac (s env)
   (cond
     ((stringp s)   (ac-string s env))
