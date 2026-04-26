@@ -1,4 +1,4 @@
-#!./clarc
+#!./klarc
 
 ; adapted from test.l in https://github.com/sctb/lumen
 

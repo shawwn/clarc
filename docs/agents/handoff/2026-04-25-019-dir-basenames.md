@@ -1,7 +1,7 @@
 ## Handoff 019: `dir` returns basenames, not full paths — 2026-04-25
 
 `(dir name)` was returning the full namestring of every match, e.g.
-`"/Users/shawn/ml/clarc/arc/news/story/1"` instead of `"1"`. That broke
+`"/Users/shawn/ml/klarc/arc/news/story/1"` instead of `"1"`. That broke
 `load-items` in news.arc:170, which does `(map int (dir storydir*))` —
 coerce blew up trying to turn the absolute path into an integer.
 

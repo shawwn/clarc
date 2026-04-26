@@ -3,7 +3,7 @@
 The repo had no top-level README, and `copyright` carried the original
 Arc 3.1 Artistic License 2.0 notice. Shawn emailed Paul Graham asking
 to release Arc under MIT and got the OK, so we relicensed and wrote a
-README that frames clarc in the context of dang's HN-on-Common-Lisp
+README that frames klarc in the context of dang's HN-on-Common-Lisp
 migration.
 
 ## Changes
@@ -12,13 +12,13 @@ migration.
   - Intro pointing at the HN announcement
     ([item 44099006](https://news.ycombinator.com/item?id=44099006))
     and Vincent Massol's [Lisp Journey write-up](https://lisp-journey.gitlab.io/blog/hacker-news-now-runs-on-top-of-common-lisp/),
-    framing clarc as an independent open-source Arc-on-Common-Lisp
+    framing klarc as an independent open-source Arc-on-Common-Lisp
     runtime in the same spirit as dang's *Clarc*.
   - `## Requirements` hoisted above both run sections (single SBCL
     install line, no duplication).
   - `## Running the tests` (`./test.arc`, ~193 passed, 0 failed).
   - `## Running News` lifted from `how-to-run-news.md` (mkdir, admins,
-    `./clarc`, `(load "news.arc")`, `(nsv)`, localhost:8080).
+    `./klarc`, `(load "news.arc")`, `(nsv)`, localhost:8080).
   - `## Customizing News` and `## Performance tuning` (cache, direct
     calls, explicit flush) — same content as `how-to-run-news.md`.
   - `## Layout` mapping the top-level `.arc` / `.lisp` files.

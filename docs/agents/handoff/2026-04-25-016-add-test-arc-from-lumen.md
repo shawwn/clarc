@@ -4,7 +4,7 @@
 
 Added `test.arc` at the repo root — a runnable arc test script adapted
 from `test.l` in https://github.com/sctb/lumen. Executable shebang
-`#!./clarc`, ends with `(run-tests)` so `./test.arc` runs the suite.
+`#!./klarc`, ends with `(run-tests)` so `./test.arc` runs the suite.
 
 Three commits in this session:
 
@@ -44,7 +44,7 @@ Three commits in this session:
 ### What was intentionally left commented out
 
 Roughly 60 test cases from the lumen suite are present but commented
-with `;`. These exercise features clarc does not yet implement or
+with `;`. These exercise features klarc does not yet implement or
 where behavior intentionally differs:
 
 - `unset` / `(void)` — no equivalent in current arc runtime.

@@ -1,11 +1,11 @@
-# clarc
+# klarc
 
 An Arc-to-Common-Lisp port of [Arc](http://arclanguage.org/) and the
 News web app that powers [Hacker News](https://news.ycombinator.com).
 
 In September 2024, Hacker News migrated from Arc-on-Racket to Arc on
-[SBCL](http://www.sbcl.org/) using a compiler called *Clarc* that dang
-had been developing for years. The port lets HN run on multiple cores
+[SBCL](http://www.sbcl.org/) using a compiler called *Clarc* (with a
+`c`) that dang had been developing for years. The port lets HN run on multiple cores
 and was fast enough to retire pagination on long threads. See the
 [announcement thread](https://news.ycombinator.com/item?id=44099006)
 and Vincent Massol's [write-up](https://lisp-journey.gitlab.io/blog/hacker-news-now-runs-on-top-of-common-lisp/).
@@ -35,7 +35,7 @@ something like `193 passed, 0 failed`.
 ```sh
 mkdir -p arc
 echo "myname" > arc/admins
-./clarc
+./klarc
 ```
 
 At the arc prompt:
@@ -71,7 +71,7 @@ Change the variables at the top of `news.arc`.
 ## Layout
 
 - `arc0.lisp` — Arc runtime for Common Lisp (port of `ac.scm`)
-- `clarc` — shell launcher that boots SBCL with `arc0.lisp`
+- `klarc` — shell launcher that boots SBCL with `arc0.lisp`
 - `arc.arc`, `libs.arc`, `strings.arc`, `code.arc`, `html.arc`,
   `pprint.arc`, `srv.arc`, `app.arc`, `prompt.arc` — Arc itself,
   built on top of `arc0`
