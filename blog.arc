@@ -1,3 +1,5 @@
+#!./klarc
+
 ; Blog tool example.  20 Jan 08, rev 21 May 09.
 
 ; To run:
@@ -92,4 +94,5 @@
   (load-posts)
   (asv))
 
-
+(when (main)
+  (bsv))
