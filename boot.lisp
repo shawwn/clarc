@@ -6,7 +6,7 @@
 ;;;;   * stdin not a tty:  read/eval all expressions from stdin and exit
 ;;;;   * otherwise:        drop into the Arc REPL
 
-(load (merge-pathnames "arc0.lisp" *load-pathname*))
+(load (merge-pathnames "arc1.lisp" *load-pathname*))
 
 (defun arc-verbose-p ()
   (let ((v (uiop:getenv "ARC_VERBOSE")))
