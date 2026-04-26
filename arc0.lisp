@@ -278,6 +278,10 @@ empty-name symbol (`||`) from no token at all."
 (defun arc-bound-p (s)
   (nth-value 1 (gethash (arc-sym-key s) *arc-globals*)))
 
+(defun arc-global-ref (s)
+  (multiple-value-bind (v present) (gethash (arc-sym-key s) *arc-globals*)
+    (if present v (error "Unbound variable: ~A" s))))
+
 ;;; xdef: define an Arc primitive
 (defmacro xdef (name val)
   `(setf (arc-global ',name) ,val))
@@ -594,7 +598,7 @@ empty-name symbol (`||`) from no token at all."
 ;;;; ---- call / macros ----
 
 (defun ac-var-ref (s env)
-  (if (lex-p s env) s `(arc-global ',s)))
+  (if (lex-p s env) s `(arc-global-ref ',s)))
 
 (defun lex-p (v env) (member v env :test #'eq))
 
