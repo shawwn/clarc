@@ -137,10 +137,9 @@ empty-name symbol (`||`) from no token at all."
   "Read a list, handling dotted pairs."
   (let ((result nil))
     (loop
-      (arc-skip-ws stream)
-      (let ((c (peek-char nil stream nil nil)))
+      (let ((c (arc-skip-ws stream)))
         (cond
-          ((null c) (error "Unexpected EOF in list"))
+          ((eq c :eof) (error "Unexpected EOF in list"))
           ((char= c close-char) (read-char stream) (return (nreverse result)))
           ((char= c #\.)
            ;; could be dot or number or symbol starting with .
@@ -164,18 +163,21 @@ empty-name symbol (`||`) from no token at all."
            (push (arc-read-1 stream) result)))))))
 
 (defun arc-skip-ws (stream)
+  "Skip whitespace and comments.  Returns the next char (peeked, not
+   consumed) or :eof.  On a TTY, `peek-char' triggers a read syscall;
+   returning the char lets callers avoid a second peek that would
+   require a second EOF (Ctrl-D) to dislodge."
   (loop
-    (let ((c (peek-char nil stream nil nil)))
+    (let ((c (peek-char nil stream nil :eof)))
       (cond
-        ((null c) (return))
+        ((eq c :eof) (return :eof))
         ((char= c #\;) (arc-skip-comment stream))
         ((arc-whitespace-p c) (read-char stream))
-        (t (return))))))
+        (t (return c))))))
 
 (defun arc-read-1 (stream)
   "Read one Arc expression from stream."
-  (arc-skip-ws stream)
-  (let ((c (peek-char nil stream nil :eof)))
+  (let ((c (arc-skip-ws stream)))
     (cond
       ((eq c :eof) (values :eof t))
       ((char= c #\()
@@ -1090,8 +1092,11 @@ empty-name symbol (`||`) from no token at all."
 
 (xdef new-thread
   (lambda (f)
-    (sb-thread:make-thread (lambda () (ar-funcall0 f))
-                           :name "arc")))
+    (sb-thread:make-thread
+     (lambda ()
+       (handler-case (ar-funcall0 f)
+         (error (c) (arc-report-error c *error-output*) nil)))
+     :name "arc")))
 
 (xdef kill-thread
   (lambda (th) (sb-thread:terminate-thread th) nil))
@@ -1383,6 +1388,12 @@ empty-name symbol (`||`) from no token at all."
 
 (defvar *arc-last-err* nil)
 
+(defun arc-report-error (c &optional (stream *standard-output*))
+  (setf *arc-last-err* c)
+  (format stream "Error: ~A~%" c)
+  (sb-debug:print-backtrace :stream stream :count 30)
+  (force-output stream))
+
 (defun arc-tl ()
   (format t "Use (quit) to quit, (arc:arc-tl) to return here after an interrupt.~%")
   (arc-tl2))
@@ -1390,25 +1401,39 @@ empty-name symbol (`||`) from no token at all."
 (defun arc-tl2 ()
   (format t "arc> ")
   (force-output *standard-output*)
-  (handler-case
+  (block iter
+    (handler-bind ((sb-sys:interactive-interrupt
+                    (lambda (c)
+                      (declare (ignore c))
+                      (clear-input *standard-input*)
+                      (terpri)
+                      (return-from iter)))
+                   (error (lambda (c)
+                            (arc-report-error c)
+                            (return-from iter))))
       (let ((expr (arc-read *standard-input* nil :eof)))
         (cond
-          ((or (eq expr :eof) (equal expr :a)) 'done)
+          ((or (eq expr :eof) (equal expr :a)) (return-from arc-tl2 'done))
           (t
            (let ((val (arc-eval expr)))
              (write val :readably nil)
              (terpri)
              (setf (arc-global '|that|)     val)
-             (setf (arc-global '|thatexpr|) expr)
-             (arc-tl2)))))
-    (error (c)
-      (setf *arc-last-err* c)
-      (format t "Error: ~A~%" c)
-      (arc-tl2))))
+             (setf (arc-global '|thatexpr|) expr)))))))
+  (arc-tl2))
 
 ;;;; ============================================================
 ;;;; Boot
 ;;;; ============================================================
+
+(defun arc-verbose-p ()
+  "True iff ARC_VERBOSE is set to a non-empty, non-zero value.
+   Gates boot-time chatter; unset by default to keep scripts quiet."
+  (let ((v (uiop:getenv "ARC_VERBOSE")))
+    (and v (not (string= v "")) (not (string= v "0")))))
+
+(defmacro arc-vlog (&rest args)
+  `(when (arc-verbose-p) (format t ,@args) (force-output)))
 
 (defun arc-boot (&key arc-dir files)
   (unless arc-dir
@@ -1418,16 +1443,17 @@ empty-name symbol (`||`) from no token at all."
             (or *load-pathname* *compile-file-pathname*
                 (truename "."))))))
   (let ((*default-pathname-defaults* (pathname arc-dir)))
-    (format t "Loading arc.arc...~%") (force-output)
+    (arc-vlog "Loading arc.arc...~%")
     (arc-load (merge-pathnames "arc.arc" arc-dir))
-    (format t "Loading libs.arc...~%") (force-output)
+    (arc-vlog "Loading libs.arc...~%")
     (ignore-errors (arc-load (merge-pathnames "libs.arc" arc-dir)))
     (cond (files
            (dolist (f files) (arc-load f))
            (uiop:quit 0))
           (t
-           (format t "Arc ready.~%")
+           (arc-vlog "Arc ready.~%")
            (arc-tl)))))
 
 (eval-when (:load-toplevel :execute)
-  (format t "~&arc0: runtime loaded. Call (arc:arc-boot) to start.~%"))
+  (when (arc-verbose-p)
+    (format t "~&arc0: runtime loaded. Call (arc:arc-boot) to start.~%")))

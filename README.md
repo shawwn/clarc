@@ -71,7 +71,11 @@ Change the variables at the top of `news.arc`.
 ## Layout
 
 - `arc0.lisp` — Arc runtime for Common Lisp (port of `ac.scm`)
-- `klarc` — shell launcher that boots SBCL with `arc0.lisp`
+- `boot.lisp` — script entry point loaded via `sbcl --script`; loads
+  `arc0.lisp`, then either runs each given Arc file and exits, or
+  drops into the Arc REPL when no files are given (analogue of
+  `arc3.2/as.scm`)
+- `klarc` — thin shell wrapper: `exec sbcl --script boot.lisp "$@"`
 - `arc.arc`, `libs.arc`, `strings.arc`, `code.arc`, `html.arc`,
   `pprint.arc`, `srv.arc`, `app.arc`, `prompt.arc` — Arc itself,
   built on top of `arc0`

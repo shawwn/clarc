@@ -1,15 +1,3 @@
 #!/bin/sh
 DIR="$(cd "$(dirname "$0")" && pwd)"
-FILES=""
-for f in "$@"; do
-  esc=$(printf '%s' "$f" | sed 's/\\/\\\\/g; s/"/\\"/g')
-  FILES="$FILES \"$esc\""
-done
-if [ -n "$FILES" ]; then
-  BOOT="(arc:arc-boot :arc-dir \"${ARC_DIR:-$DIR/}\" :files (list$FILES))"
-else
-  BOOT="(arc:arc-boot :arc-dir \"${ARC_DIR:-$DIR/}\")"
-fi
-exec sbcl --noinform \
-     --load "$DIR/arc0.lisp" \
-     --eval "$BOOT"
+exec sbcl --script "$DIR/boot.lisp" "$@"
