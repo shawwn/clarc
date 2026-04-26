@@ -6,9 +6,6 @@
   (require :sb-bsd-sockets)
   (load (merge-pathnames "arc0.lisp" *load-pathname*)))
 
-#+sbcl
-(declaim (sb-ext:muffle-conditions cl:style-warning))
-
 (defpackage :arc
   (:use :common-lisp)
   (:export #:arc-load #:arc-eval #:arc-read #:arc-read-1 #:arc-tl))
@@ -647,4 +644,27 @@ empty-name symbol (`||`) from no token at all."
                      (pos  (file-position in)))
                 (cons expr (codestring (subseq rest pos)))))
         (list s))))
+
+;;;; ============================================================
+;;;; Arc eval / load
+;;;; ============================================================
+
+(defun arc-eval (expr)
+  (eval (ac expr nil)))
+
+(xdef eval #'arc-eval)
+
+(defun arc-load (filename)
+  (with-open-file (p filename :direction :input
+                              :element-type 'character
+                              :external-format :utf-8)
+    (let ((path (namestring (truename p)))
+          (prev (arc-global '|script-file*|)))
+      (setf (arc-global '|script-file*|) path)
+      (unwind-protect
+           (loop
+             (let ((x (arc-read p nil :eof)))
+               (when (eq x :eof) (return))
+               (arc-eval x)))
+        (setf (arc-global '|script-file*|) prev)))))
 

@@ -1,8 +1,5 @@
 ;;; arc0.lisp -- Arc runtime for Common Lisp (SBCL)
 
-#+sbcl
-(declaim (sb-ext:muffle-conditions cl:style-warning))
-
 (defpackage :arc
   (:use :common-lisp))
 
@@ -120,33 +117,6 @@
 
 (defun arc-call3 (fn a b c)
   (if (functionp fn) (funcall fn a b c) (ar-apply fn (list a b c))))
-
-;;;; ============================================================
-;;;; Arc eval / load
-;;;; ============================================================
-
-(defun arc-eval (expr)
-  #+sbcl
-  (handler-bind ((style-warning #'muffle-warning))
-    (eval (ac expr nil)))
-  #-sbcl
-  (eval (ac expr nil)))
-
-(defun arc-load (filename)
-  (with-open-file (p filename :direction :input
-                              :element-type 'character
-                              :external-format :utf-8)
-    (let ((path (namestring (truename p)))
-          (prev (arc-global '|script-file*|)))
-      (setf (arc-global '|script-file*|) path)
-      (unwind-protect
-           (loop
-             (let ((x (arc-read p nil :eof)))
-               (when (eq x :eof) (return))
-               (arc-eval x)))
-        (setf (arc-global '|script-file*|) prev)))))
-
-(xdef eval #'arc-eval)
 
 ;;;; ============================================================
 ;;;; Core primitives
