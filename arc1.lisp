@@ -263,15 +263,6 @@ empty-name symbol (`||`) from no token at all."
         val)))
 
 ;;;; ============================================================
-;;;; Tagged types
-;;;; ============================================================
-
-(defstruct (arc-tagged (:constructor %arc-tag (type rep)))
-  type rep)
-
-(defun ar-tagged-p (x) (typep x 'arc-tagged))
-
-;;;; ============================================================
 ;;;; Global variable table  (key = lowercase string)
 ;;;; ============================================================
 
@@ -646,7 +637,7 @@ empty-name symbol (`||`) from no token at all."
 (defun ac-macro-p (fn)
   (when (symbolp fn)
     (let ((val (gethash (arc-sym-key fn) *arc-globals*)))
-      (when (and val (ar-tagged-p val)
+      (when (and val (arc-tagged-p val)
                  (arc-sym= (arc-tagged-type val) "mac"))
         (arc-tagged-rep val)))))
 
@@ -745,30 +736,7 @@ empty-name symbol (`||`) from no token at all."
 
 (xdef is #'arc-is)
 
-(defun char-or-str-p (x) (or (stringp x) (characterp x)))
-
-(defun ar-+2 (x y)
-  (cond ((and (numberp x) (numberp y)) (+ x y))
-        ((char-or-str-p x)
-         (concatenate 'string
-                      (if (characterp x) (string x) x)
-                      (if (characterp y) (string y) y)))
-        ((and (arc-list-p x) (arc-list-p y)) (append x y))
-        (t (+ x y))))
-
-(xdef + (&rest args)
-  (cond
-    ((null args) 0)
-    ((char-or-str-p (car args))
-     (apply #'concatenate 'string
-            (mapcar (lambda (a)
-                      (cond ((stringp a) a)
-                            ((characterp a) (string a))
-                            ((null a) "")
-                            (t (format nil "~A" a))))
-                    args)))
-    ((arc-list-p (car args)) (apply #'append args))
-    (t (apply #'+ args))))
+(xdef + #'arc-+)
 
 (xdef - #'-)
 (xdef * #'*)
@@ -777,61 +745,17 @@ empty-name symbol (`||`) from no token at all."
 (xdef expt #'expt)
 (xdef sqrt #'sqrt)
 
-(defun ar->2 (x y)
-  (tnil (cond ((and (numberp x) (numberp y)) (> x y))
-              ((and (stringp x) (stringp y)) (string> x y))
-              ((and (symbolp x) (symbolp y))
-               (string> (symbol-name x) (symbol-name y)))
-              ((and (characterp x) (characterp y)) (char> x y))
-              (t (> x y)))))
-
-(defun ar-<2 (x y)
-  (tnil (cond ((and (numberp x) (numberp y)) (< x y))
-              ((and (stringp x) (stringp y)) (string< x y))
-              ((and (symbolp x) (symbolp y))
-               (string< (symbol-name x) (symbol-name y)))
-              ((and (characterp x) (characterp y)) (char< x y))
-              (t (< x y)))))
-
-(xdef > (&rest args) (pairwise #'ar->2 args))
-(xdef < (&rest args) (pairwise #'ar-<2 args))
+(xdef > (&rest args) (pairwise #'arc->2 args))
+(xdef < (&rest args) (pairwise #'arc-<2 args))
 
 (xdef len (x)
   (cond ((stringp x)    (length x))
         ((hash-table-p x) (hash-table-count x))
         (t (length x))))
 
-;;;; ---- Type system ----
-
-(defun ar-type (x)
-  (cond
-    ((ar-tagged-p x)                   (arc-tagged-type x))
-    ((consp x)                         (intern "cons"    :arc))
-    ((null x)                          (intern "sym"     :arc))
-    ((symbolp x)                       (intern "sym"     :arc))
-    ((functionp x)                     (intern "fn"      :arc))
-    ((characterp x)                    (intern "char"    :arc))
-    ((stringp x)                       (intern "string"  :arc))
-    ((and (integerp x) (= x (truncate x))) (intern "int" :arc))
-    ((numberp x)                       (intern "num"     :arc))
-    ((hash-table-p x)                  (intern "table"   :arc))
-    ((and (streamp x) (output-stream-p x)) (intern "output" :arc))
-    ((and (streamp x) (input-stream-p x))  (intern "input"  :arc))
-    ((typep x 'sb-thread:thread)       (intern "thread"  :arc))
-    (t (error "Unknown type: ~S" x))))
-
-(defun ar-tag (type rep)
-  (if (and (ar-tagged-p rep)
-           (arc-sym= (arc-tagged-type rep) (symbol-name type)))
-      rep
-      (%arc-tag type rep)))
-
-(defun ar-rep (x)
-  (if (ar-tagged-p x) (arc-tagged-rep x) x))
-
-(xdef annotate #'ar-tag)
-(xdef type     #'ar-type)
-(xdef rep      #'ar-rep)
+(xdef annotate #'arc-tag)
+(xdef type     #'arc-type)
+(xdef rep      #'arc-rep)
 
 ;;;; ---- Gensym ----
 
@@ -977,8 +901,8 @@ empty-name symbol (`||`) from no token at all."
   (let ((tname (string-downcase
                 (if (symbolp type) (symbol-name type) (string type)))))
     (cond
-      ((ar-tagged-p x) (error "Can't coerce annotated object"))
-      ((string= tname (string-downcase (symbol-name (ar-type x)))) x)
+      ((arc-tagged-p x) (error "Can't coerce annotated object"))
+      ((string= tname (string-downcase (symbol-name (arc-type x)))) x)
       ((characterp x)
        (cond ((string= tname "int")    (char-code x))
              ((string= tname "string") (string x))
