@@ -10,7 +10,7 @@
 
 (defpackage :arc
   (:use :common-lisp)
-  (:export #:arc-boot #:arc-load #:arc-eval #:arc-read #:arc-read-1 #:arc-tl))
+  (:export #:arc-load #:arc-eval #:arc-read #:arc-read-1 #:arc-tl))
 
 (in-package :arc)
 
@@ -1427,41 +1427,3 @@ empty-name symbol (`||`) from no token at all."
              (setf (arc-global '|thatexpr|) expr)))))))
   (arc-tl2))
 
-;;;; ============================================================
-;;;; Boot
-;;;; ============================================================
-
-(defun arc-verbose-p ()
-  "True iff ARC_VERBOSE is set to a non-empty, non-zero value.
-   Gates boot-time chatter; unset by default to keep scripts quiet."
-  (let ((v (uiop:getenv "ARC_VERBOSE")))
-    (and v (not (string= v "")) (not (string= v "0")))))
-
-(defmacro arc-vlog (&rest args)
-  `(when (arc-verbose-p) (format t ,@args) (force-output)))
-
-(defun arc-boot (&key arc-dir files)
-  (unless arc-dir
-    (setf arc-dir
-          (namestring
-           (uiop:pathname-directory-pathname
-            (or *load-pathname* *compile-file-pathname*
-                (truename "."))))))
-  (let ((*default-pathname-defaults* (pathname arc-dir)))
-    (arc-vlog "Loading arc.arc...~%")
-    (arc-load (merge-pathnames "arc.arc" arc-dir))
-    (arc-vlog "Loading libs.arc...~%")
-    (ignore-errors (arc-load (merge-pathnames "libs.arc" arc-dir)))
-    (when files
-      (setf (arc-global '|main-file*|)
-            (namestring (truename (car (last files))))))
-    (cond (files
-           (dolist (f files) (arc-load f))
-           (uiop:quit 0))
-          (t
-           (arc-vlog "Arc ready.~%")
-           (arc-tl)))))
-
-(eval-when (:load-toplevel :execute)
-  (when (arc-verbose-p)
-    (format t "~&arc0: runtime loaded. Call (arc:arc-boot) to start.~%")))
