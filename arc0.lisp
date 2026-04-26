@@ -74,13 +74,15 @@
 
 (xdef sig *arc-fn-signatures*)
 
-(xdef declare (key val)
+(defun arc-declare (key val)
   (let ((flag (not (null val)))
         (k (string-downcase (symbol-name key))))
     (cond ((string= k "atstrings")      (setf *arc-atstrings*      flag))
           ((string= k "direct-calls")   (setf *arc-direct-calls*   flag))
           ((string= k "explicit-flush") (setf *arc-explicit-flush* flag)))
     val))
+
+(xdef declare #'arc-declare)
 
 ;;;; ============================================================
 ;;;; Funcall helpers
@@ -283,6 +285,19 @@
       (arc-call1 f (lambda (x) (throw tag x))))))
 
 (xdef ccc #'arc-ccc)
+
+;;;; ============================================================
+;;;; Higher-level utilities
+;;;; ============================================================
+
+(defun arc-car? (l &optional (k :arc/unset) &key (test #'arc-id))
+  (and (consp l)
+       (if (eq k :arc/unset) (car l)
+         (if (functionp k) (funcall k (car l))
+           (test (car l) k)))))
+
+(defun arc-caar? (l &optional (k :arc/unset) &key (test #'arc-id))
+  (arc-car? (arc-car? l) k :test test))
 
 ;;;; ============================================================
 ;;;; Tagged types
