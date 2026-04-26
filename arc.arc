@@ -54,6 +54,14 @@
 
 (def atom (x) (no (acons x)))
 
+(def reduce (f xs)
+  (if (no (cdr xs))
+      (car xs)
+      (f (car xs) (reduce f (cdr xs)))))
+
+(def cons args
+  (reduce join args))
+
 ; Can return to this def once Rtm gets ac to make all rest args
 ; nil-terminated lists.
 
@@ -1407,16 +1415,6 @@
     (each (k v) (counts seq)
       (when (> v n) (= winner k n v)))
     (list winner n)))
-
-(def reduce (f xs)
-  (if (cddr xs)
-      (reduce f (cons (f (car xs) (cadr xs)) (cddr xs)))
-      (apply f xs)))
-
-(def rreduce (f xs)
-  (if (cddr xs)
-      (f (car xs) (rreduce f (cdr xs)))
-      (apply f xs)))
 
 (let argsym (uniq)
 

@@ -9,8 +9,11 @@
 (in-package :arc)
 
 ;;;; ============================================================
-;;;; Arc primitives
+;;;; Primitives
 ;;;; ============================================================
+
+(defun arc-join (&optional (a nil) (b nil))
+  (cons a b))
 
 (defun arc-car (x)
   (cond ((consp x) (car x))

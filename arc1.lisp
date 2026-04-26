@@ -735,7 +735,7 @@ empty-name symbol (`||`) from no token at all."
 ;;;; Core primitives
 ;;;; ============================================================
 
-(xdef cons #'cons)
+(xdef join #'arc-join)
 
 (xdef car #'arc-car)
 
