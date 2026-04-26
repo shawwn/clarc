@@ -334,6 +334,16 @@ empty-name symbol (`||`) from no token at all."
         ((null l) nil)
         (t (funcall f l))))
 
+(defun arc-car (x)
+  (cond ((consp x) (car x))
+        ((null x)  nil)
+        (t (error "Can't take car of ~S" x))))
+
+(defun arc-cdr (x)
+  (cond ((consp x) (cdr x))
+        ((null x)  nil)
+        (t (error "Can't take cdr of ~S" x))))
+
 ;;;; ============================================================
 ;;;; ssyntax
 ;;;; ============================================================
@@ -736,15 +746,9 @@ empty-name symbol (`||`) from no token at all."
 
 (xdef cons #'cons)
 
-(xdef car (x)
-  (cond ((consp x) (car x))
-        ((null x)  nil)
-        (t (error "Can't take car of ~S" x))))
+(xdef car #'arc-car)
 
-(xdef cdr (x)
-  (cond ((consp x) (cdr x))
-        ((null x)  nil)
-        (t (error "Can't take cdr of ~S" x))))
+(xdef cdr #'arc-cdr)
 
 (defun pairwise (pred lst)
   (cond ((null lst) t)
