@@ -1,11 +1,10 @@
 ;;; arc1.lisp -- Arc compiler for Common Lisp (SBCL)
 ;;; Port of arc3.2/ac.scm.  Usage: sbcl --load arc1.lisp
 
-(load (merge-pathnames "arc0.lisp" *load-pathname*))
-
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require :asdf)
-  (require :sb-bsd-sockets))
+  (require :sb-bsd-sockets)
+  (load (merge-pathnames "arc0.lisp" *load-pathname*)))
 
 #+sbcl
 (declaim (sb-ext:muffle-conditions cl:style-warning))
@@ -335,16 +334,6 @@ empty-name symbol (`||`) from no token at all."
   (cond ((consp l) (cons (funcall f (car l)) (arc-imap f (cdr l))))
         ((null l) nil)
         (t (funcall f l))))
-
-(defun arc-car (x)
-  (cond ((consp x) (car x))
-        ((null x)  nil)
-        (t (error "Can't take car of ~S" x))))
-
-(defun arc-cdr (x)
-  (cond ((consp x) (cdr x))
-        ((null x)  nil)
-        (t (error "Can't take cdr of ~S" x))))
 
 ;;;; ============================================================
 ;;;; ssyntax
