@@ -282,9 +282,19 @@ empty-name symbol (`||`) from no token at all."
   (multiple-value-bind (v present) (gethash (arc-sym-key s) *arc-globals*)
     (if present v (error "Unbound variable: ~A" s))))
 
-;;; xdef: define an Arc primitive
-(defmacro xdef (name val)
-  `(setf (arc-global ',name) ,val))
+(defun arc-global-name (name)
+  (intern (concatenate 'string "arc--" (symbol-name name))))
+
+;;; xdef: define an Arc primitive.
+;;; (xdef name value)              - bind name to value
+;;; (xdef name (args...) body...)  - defun arc--NAME and bind name to it,
+;;;                                  so the function shows up in backtraces.
+(defmacro xdef (name x &rest body)
+  (if (null body)
+      `(setf (arc-global ',name) ,x)
+      (let ((f (arc-global-name name)))
+        `(progn (defun ,f ,x ,@body)
+                (xdef ,name #',f)))))
 
 ;;;; ============================================================
 ;;;; Compiler options
@@ -717,15 +727,15 @@ empty-name symbol (`||`) from no token at all."
 
 (xdef cons #'cons)
 
-(xdef car (lambda (x)
-             (cond ((consp x) (car x))
-                   ((null x)  nil)
-                   (t (error "Can't take car of ~S" x)))))
+(xdef car (x)
+  (cond ((consp x) (car x))
+        ((null x)  nil)
+        (t (error "Can't take car of ~S" x))))
 
-(xdef cdr (lambda (x)
-             (cond ((consp x) (cdr x))
-                   ((null x)  nil)
-                   (t (error "Can't take cdr of ~S" x)))))
+(xdef cdr (x)
+  (cond ((consp x) (cdr x))
+        ((null x)  nil)
+        (t (error "Can't take cdr of ~S" x))))
 
 (defun pairwise (pred lst)
   (cond ((null lst) t)
@@ -747,7 +757,7 @@ empty-name symbol (`||`) from no token at all."
             (and (stringp a) (stringp b) (string= a b))
             (and (null a) (null b)))))
 
-(xdef is (lambda (&rest args) (pairwise #'ar-is2 args)))
+(xdef is (&rest args) (pairwise #'ar-is2 args))
 
 (defun char-or-str-p (x) (or (stringp x) (characterp x)))
 
@@ -760,19 +770,19 @@ empty-name symbol (`||`) from no token at all."
         ((and (arc-list-p x) (arc-list-p y)) (append x y))
         (t (+ x y))))
 
-(xdef + (lambda (&rest args)
-           (cond
-             ((null args) 0)
-             ((char-or-str-p (car args))
-              (apply #'concatenate 'string
-                     (mapcar (lambda (a)
-                               (cond ((stringp a) a)
-                                     ((characterp a) (string a))
-                                     ((null a) "")
-                                     (t (format nil "~A" a))))
-                             args)))
-             ((arc-list-p (car args)) (apply #'append args))
-             (t (apply #'+ args)))))
+(xdef + (&rest args)
+  (cond
+    ((null args) 0)
+    ((char-or-str-p (car args))
+     (apply #'concatenate 'string
+            (mapcar (lambda (a)
+                      (cond ((stringp a) a)
+                            ((characterp a) (string a))
+                            ((null a) "")
+                            (t (format nil "~A" a))))
+                    args)))
+    ((arc-list-p (car args)) (apply #'append args))
+    (t (apply #'+ args))))
 
 (xdef - #'-)
 (xdef * #'*)
@@ -797,13 +807,13 @@ empty-name symbol (`||`) from no token at all."
               ((and (characterp x) (characterp y)) (char< x y))
               (t (< x y)))))
 
-(xdef > (lambda (&rest args) (pairwise #'ar->2 args)))
-(xdef < (lambda (&rest args) (pairwise #'ar-<2 args)))
+(xdef > (&rest args) (pairwise #'ar->2 args))
+(xdef < (&rest args) (pairwise #'ar-<2 args))
 
-(xdef len (lambda (x)
-             (cond ((stringp x)    (length x))
-                   ((hash-table-p x) (hash-table-count x))
-                   (t (length x)))))
+(xdef len (x)
+  (cond ((stringp x)    (length x))
+        ((hash-table-p x) (hash-table-count x))
+        (t (length x))))
 
 ;;;; ---- Type system ----
 
@@ -848,65 +858,63 @@ empty-name symbol (`||`) from no token at all."
 
 ;;;; ---- Continuations (escape-only) ----
 
-(xdef ccc (lambda (f)
-             (let ((tag (gensym "K")))
-               (catch tag
-                 (ar-funcall1 f (lambda (x) (throw tag x)))))))
+(xdef ccc (f)
+  (let ((tag (gensym "K")))
+    (catch tag
+      (ar-funcall1 f (lambda (x) (throw tag x))))))
 
 ;;;; ============================================================
 ;;;; I/O
 ;;;; ============================================================
 
-(xdef infile  (lambda (f)
-                (open f :direction :input
-                        :element-type 'character
-                        :external-format :latin-1)))
+(xdef infile (f)
+  (open f :direction :input
+          :element-type 'character
+          :external-format :latin-1))
 
-(xdef infile-binary (lambda (f)
-                      (open f :direction :input
-                              :element-type '(unsigned-byte 8))))
+(xdef infile-binary (f)
+  (open f :direction :input
+          :element-type '(unsigned-byte 8)))
 
-(xdef outfile (lambda (f &rest args)
-                (open f :direction :output
-                        :element-type 'character
-                        :external-format :latin-1
-                        :if-exists (if (equal (car args) "append") :append :supersede)
-                        :if-does-not-exist :create)))
+(xdef outfile (f &rest args)
+  (open f :direction :output
+          :element-type 'character
+          :external-format :latin-1
+          :if-exists (if (equal (car args) "append") :append :supersede)
+          :if-does-not-exist :create))
 
 (xdef instring  #'make-string-input-stream)
-(xdef outstring (lambda () (make-string-output-stream)))
+(xdef outstring () (make-string-output-stream))
 (xdef inside    #'get-output-stream-string)
 
-(xdef stdout (lambda () *standard-output*))
-(xdef stdin  (lambda () *standard-input*))
-(xdef stderr (lambda () *error-output*))
+(xdef stdout () *standard-output*)
+(xdef stdin  () *standard-input*)
+(xdef stderr () *error-output*)
 
-(xdef call-w/stdout
-  (lambda (port thunk)
-    (let ((*standard-output* port)) (ar-funcall0 thunk))))
-(xdef call-w/stdin
-  (lambda (port thunk)
-    (let ((*standard-input* port)) (ar-funcall0 thunk))))
+(xdef call-w/stdout (port thunk)
+  (let ((*standard-output* port)) (ar-funcall0 thunk)))
+(xdef call-w/stdin (port thunk)
+  (let ((*standard-input* port)) (ar-funcall0 thunk)))
 
-(xdef readc (lambda (&rest args)
-               (let ((c (read-char (if args (car args) *standard-input*) nil nil)))
-                 (or c nil))))
+(xdef readc (&rest args)
+  (let ((c (read-char (if args (car args) *standard-input*) nil nil)))
+    (or c nil)))
 
-(xdef readb (lambda (&rest args)
-               (let ((b (read-byte (if args (car args) *standard-input*) nil nil)))
-                 (or b nil))))
+(xdef readb (&rest args)
+  (let ((b (read-byte (if args (car args) *standard-input*) nil nil)))
+    (or b nil)))
 
-(xdef peekc (lambda (&rest args)
-               (let ((c (peek-char nil (if args (car args) *standard-input*) nil nil)))
-                 (or c nil))))
+(xdef peekc (&rest args)
+  (let ((c (peek-char nil (if args (car args) *standard-input*) nil nil)))
+    (or c nil)))
 
-(xdef writec (lambda (c &rest args)
-                (write-char c (if args (car args) *standard-output*))
-                c))
+(xdef writec (c &rest args)
+  (write-char c (if args (car args) *standard-output*))
+  c)
 
-(xdef writeb (lambda (b &rest args)
-                (write-byte b (if args (car args) *standard-output*))
-                b))
+(xdef writeb (b &rest args)
+  (write-byte b (if args (car args) *standard-output*))
+  b)
 
 (defun arc-disp-val (x port)
   (cond
@@ -955,20 +963,20 @@ empty-name symbol (`||`) from no token at all."
      (write-char #\) port))
     (t (write x :stream port :readably nil))))
 
-(xdef disp (lambda (&rest args)
-              (let ((port (if (cdr args) (cadr args) *standard-output*)))
-                (when args (arc-disp-val (car args) port))
-                (unless *arc-explicit-flush* (force-output port)))
-              nil))
+(xdef disp (&rest args)
+  (let ((port (if (cdr args) (cadr args) *standard-output*)))
+    (when args (arc-disp-val (car args) port))
+    (unless *arc-explicit-flush* (force-output port)))
+  nil)
 
-(xdef write (lambda (&rest args)
-               (let ((port (if (cdr args) (cadr args) *standard-output*)))
-                 (when args (arc-write-val (car args) port))
-                 (unless *arc-explicit-flush* (force-output port)))
-               nil))
+(xdef write (&rest args)
+  (let ((port (if (cdr args) (cadr args) *standard-output*)))
+    (when args (arc-write-val (car args) port))
+    (unless *arc-explicit-flush* (force-output port)))
+  nil)
 
-(xdef sread (lambda (p eof)
-               (arc-read p nil eof)))
+(xdef sread (p eof)
+  (arc-read p nil eof))
 
 ;;;; ---- coerce ----
 
@@ -1034,7 +1042,7 @@ empty-name symbol (`||`) from no token at all."
              (t (error "Can't coerce sym ~S to ~S" x type))))
       (t x))))
 
-(xdef coerce (lambda (x type &rest args) (arc-coerce x type (car args))))
+(xdef coerce (x type &rest args) (arc-coerce x type (car args)))
 
 ;;;; ============================================================
 ;;;; Networking  (sb-bsd-sockets)
@@ -1098,204 +1106,192 @@ empty-name symbol (`||`) from no token at all."
 (xdef open-socket  #'arc-open-socket)
 (xdef socket-accept #'arc-socket-accept)
 
-(xdef setuid (lambda (uid)
-               (handler-case
-                   (sb-alien:alien-funcall
-                    (sb-alien:extern-alien
-                     "setuid"
-                     (function sb-alien:int sb-alien:unsigned))
-                    uid)
-                 (error () nil))
-               nil))
+(xdef setuid (uid)
+  (handler-case
+      (sb-alien:alien-funcall
+       (sb-alien:extern-alien
+        "setuid"
+        (function sb-alien:int sb-alien:unsigned))
+       uid)
+    (error () nil))
+  nil)
 
-(xdef client-ip (lambda (port) "unknown"))
+(xdef client-ip (port) (declare (ignore port)) "unknown")
 
 ;;;; ============================================================
 ;;;; Threading  (sb-thread)
 ;;;; ============================================================
 
-(xdef new-thread
-  (lambda (f)
-    (sb-thread:make-thread
-     (lambda ()
-       (handler-case (ar-funcall0 f)
-         (error (c) (arc-report-error c *error-output*) nil)))
-     :name "arc")))
+(xdef new-thread (f)
+  (sb-thread:make-thread
+   (lambda ()
+     (handler-case (ar-funcall0 f)
+       (error (c) (arc-report-error c *error-output*) nil)))
+   :name "arc"))
 
-(xdef kill-thread
-  (lambda (th) (sb-thread:terminate-thread th) nil))
+(xdef kill-thread (th) (sb-thread:terminate-thread th) nil)
 
-(xdef break-thread
-  (lambda (th)
-    (sb-thread:interrupt-thread
-     th (lambda () (error "Thread interrupted")))
-    nil))
+(xdef break-thread (th)
+  (sb-thread:interrupt-thread
+   th (lambda () (error "Thread interrupted")))
+  nil)
 
-(xdef current-thread (lambda () sb-thread:*current-thread*))
+(xdef current-thread () sb-thread:*current-thread*)
 
-(xdef dead (lambda (th) (tnil (not (sb-thread:thread-alive-p th)))))
+(xdef dead (th) (tnil (not (sb-thread:thread-alive-p th))))
 
-(xdef sleep (lambda (n) (sleep n) nil))
+(xdef sleep (n) (sleep n) nil)
 
 ;;;; ---- atomic-invoke ----
 
 (defvar *arc-mutex* (sb-thread:make-mutex :name "arc"))
 (defvar *arc-atomic-owner* nil)
 
-(xdef atomic-invoke
-  (lambda (f)
-    (if (eq sb-thread:*current-thread* *arc-atomic-owner*)
-        (ar-funcall0 f)
-        (sb-thread:with-mutex (*arc-mutex*)
-          (let ((*arc-atomic-owner* sb-thread:*current-thread*))
-            (ar-funcall0 f))))))
+(xdef atomic-invoke (f)
+  (if (eq sb-thread:*current-thread* *arc-atomic-owner*)
+      (ar-funcall0 f)
+      (sb-thread:with-mutex (*arc-mutex*)
+        (let ((*arc-atomic-owner* sb-thread:*current-thread*))
+          (ar-funcall0 f)))))
 
 ;;;; ============================================================
 ;;;; System calls
 ;;;; ============================================================
 
-(xdef system
-  (lambda (cmd)
-    (let* ((proc (sb-ext:run-program "/bin/sh" (list "-c" cmd)
-                                     :output :stream :wait nil))
-           (out  (sb-ext:process-output proc)))
-      (loop for c = (read-char out nil nil)
-            while c do (write-char c *standard-output*))
-      (sb-ext:process-wait proc))
-    nil))
+(xdef system (cmd)
+  (let* ((proc (sb-ext:run-program "/bin/sh" (list "-c" cmd)
+                                   :output :stream :wait nil))
+         (out  (sb-ext:process-output proc)))
+    (loop for c = (read-char out nil nil)
+          while c do (write-char c *standard-output*))
+    (sb-ext:process-wait proc))
+  nil)
 
-(xdef pipe-from
-  (lambda (cmd)
-    (sb-ext:process-output
-     (sb-ext:run-program "/bin/sh" (list "-c" cmd)
-                         :output :stream :wait nil))))
+(xdef pipe-from (cmd)
+  (sb-ext:process-output
+   (sb-ext:run-program "/bin/sh" (list "-c" cmd)
+                       :output :stream :wait nil)))
 
 ;;;; ============================================================
 ;;;; Tables / hash tables
 ;;;; ============================================================
 
-(xdef table (lambda (&rest args)
-               (let ((h (make-hash-table :test #'equal)))
-                 (when args (ar-funcall1 (car args) h))
-                 h)))
+(xdef table (&rest args)
+  (let ((h (make-hash-table :test #'equal)))
+    (when args (ar-funcall1 (car args) h))
+    h))
 
-(xdef maptable
-  (lambda (fn table)
-    (maphash (lambda (k v) (ar-funcall2 fn k v)) table)
-    table))
+(xdef maptable (fn table)
+  (maphash (lambda (k v) (ar-funcall2 fn k v)) table)
+  table)
 
-(xdef sref
-  (lambda (obj val idx)
-    (cond
-      ((hash-table-p obj)
-       (if (null val) (remhash idx obj) (setf (gethash idx obj) val)))
-      ((stringp obj)  (setf (char obj idx) val))
-      ((consp obj)    (setf (car (nthcdr idx obj)) val))
-      (t (error "Can't sref ~S" obj)))
-    val))
+(xdef sref (obj val idx)
+  (cond
+    ((hash-table-p obj)
+     (if (null val) (remhash idx obj) (setf (gethash idx obj) val)))
+    ((stringp obj)  (setf (char obj idx) val))
+    ((consp obj)    (setf (car (nthcdr idx obj)) val))
+    (t (error "Can't sref ~S" obj)))
+  val)
 
 ;;;; ============================================================
 ;;;; protect / error handling
 ;;;; ============================================================
 
-(xdef protect
-  (lambda (during after)
-    (unwind-protect (ar-funcall0 during) (ar-funcall0 after))))
+(xdef protect (during after)
+  (unwind-protect (ar-funcall0 during) (ar-funcall0 after)))
 
 (xdef err #'error)
 
-(xdef on-err
-  (lambda (errfn f)
-    (handler-case (ar-funcall0 f)
-      (error (c) (ar-funcall1 errfn c)))))
+(xdef on-err (errfn f)
+  (handler-case (ar-funcall0 f)
+    (error (c) (ar-funcall1 errfn c))))
 
-(xdef details (lambda (c) (format nil "~A" c)))
+(xdef details (c) (format nil "~A" c))
 
 ;;;; ============================================================
 ;;;; Misc primitives
 ;;;; ============================================================
 
-(xdef rand (lambda (&optional n)
-              (if n (random n)
-                  (random 1.0d0))))
+(xdef rand (&optional n)
+  (if n (random n)
+      (random 1.0d0)))
 
 (let ((urandom-stream nil))
-  (xdef randb (lambda ()
-                (unless urandom-stream
-                  (setf urandom-stream
-                        (open "/dev/urandom"
-                              :element-type '(unsigned-byte 8)
-                              :direction :input)))
-                (read-byte urandom-stream))))
+  (xdef randb ()
+    (unless urandom-stream
+      (setf urandom-stream
+            (open "/dev/urandom"
+                  :element-type '(unsigned-byte 8)
+                  :direction :input)))
+    (read-byte urandom-stream)))
 
-(xdef dir  (lambda (name)
-              (let* ((base (if (or (zerop (length name))
-                                   (eql (char name (1- (length name))) #\/))
-                               name
-                               (concatenate 'string name "/")))
-                     (files (directory (concatenate 'string base "*.*")))
-                     (subdirs (directory (concatenate 'string base "*/"))))
-                (append
-                 (loop for p in files
-                       for n = (file-namestring p)
-                       unless (or (null n) (string= n "")) collect n)
-                 (mapcar (lambda (p) (car (last (pathname-directory p))))
-                         subdirs)))))
+(xdef dir (name)
+  (let* ((base (if (or (zerop (length name))
+                       (eql (char name (1- (length name))) #\/))
+                   name
+                   (concatenate 'string name "/")))
+         (files (directory (concatenate 'string base "*.*")))
+         (subdirs (directory (concatenate 'string base "*/"))))
+    (append
+     (loop for p in files
+           for n = (file-namestring p)
+           unless (or (null n) (string= n "")) collect n)
+     (mapcar (lambda (p) (car (last (pathname-directory p))))
+             subdirs))))
 
-(xdef file-exists (lambda (name) (if (probe-file name) name nil)))
+(xdef file-exists (name) (if (probe-file name) name nil))
 
-(xdef dir-exists
-  (lambda (name)
-    (let ((p (probe-file name)))
-      (if (and p (cl:pathname-name p) (string= (cl:pathname-name p) ""))
-          nil
-          (if (and p (null (pathname-name p))) name nil)))))
+(xdef dir-exists (name)
+  (let ((p (probe-file name)))
+    (if (and p (cl:pathname-name p) (string= (cl:pathname-name p) ""))
+        nil
+        (if (and p (null (pathname-name p))) name nil))))
 
-(xdef rmfile (lambda (name) (delete-file name) nil))
+(xdef rmfile (name) (delete-file name) nil)
 
-(xdef mvfile (lambda (old new)
-               ; CL rename-file merges new-name with old's truename, which can
-               ; double directory components and inherit the old extension.
-               ; Avoid both by making new-name absolute and setting type to
-               ; :unspecific (explicitly no extension) when the caller provides none.
-               (let* ((new-p    (pathname new))
-                      (new-typed (make-pathname :defaults new-p
-                                               :type (or (pathname-type new-p) :unspecific)))
-                      (new-abs  (merge-pathnames new-typed *default-pathname-defaults*)))
-                 (rename-file old new-abs))
-               nil))
+(xdef mvfile (old new)
+  ; CL rename-file merges new-name with old's truename, which can
+  ; double directory components and inherit the old extension.
+  ; Avoid both by making new-name absolute and setting type to
+  ; :unspecific (explicitly no extension) when the caller provides none.
+  (let* ((new-p    (pathname new))
+         (new-typed (make-pathname :defaults new-p
+                                   :type (or (pathname-type new-p) :unspecific)))
+         (new-abs  (merge-pathnames new-typed *default-pathname-defaults*)))
+    (rename-file old new-abs))
+  nil)
 
-(xdef bound (lambda (x) (tnil (arc-bound-p x))))
+(xdef bound (x) (tnil (arc-bound-p x)))
 
 (xdef newstring #'make-string)
 
-(xdef trunc (lambda (x) (truncate x)))
+(xdef trunc (x) (truncate x))
 
-(xdef exact (lambda (x) (tnil (and (integerp x) (= x (truncate x))))))
+(xdef exact (x) (tnil (and (integerp x) (= x (truncate x)))))
 
 (defun arc-msec ()
   (floor (* 1000 (/ (get-internal-real-time)
                     internal-time-units-per-second))))
 (xdef msec #'arc-msec)
 
-(xdef current-process-milliseconds
-  (lambda () (floor (* 1000 (/ (get-internal-run-time)
-                               internal-time-units-per-second)))))
+(xdef current-process-milliseconds ()
+  (floor (* 1000 (/ (get-internal-run-time)
+                    internal-time-units-per-second))))
 
-(xdef current-gc-milliseconds (lambda () 0))
+(xdef current-gc-milliseconds () 0)
 
 ;;; Unix time: CL universal time is from 1900; Unix from 1970
 (defconstant +cl-to-unix+ 2208988800)
 
-(xdef seconds (lambda () (- (get-universal-time) +cl-to-unix+)))
+(xdef seconds () (- (get-universal-time) +cl-to-unix+))
 
-(xdef timedate
-  (lambda (&rest args)
-    (let* ((unix (if args (car args) (- (get-universal-time) +cl-to-unix+)))
-           (ut   (+ unix +cl-to-unix+))
-           (d    (multiple-value-list (decode-universal-time ut 0))))
-      ;; sec min hr day mon yr ...
-      (list (first d) (second d) (third d) (fourth d) (fifth d) (sixth d)))))
+(xdef timedate (&rest args)
+  (let* ((unix (if args (car args) (- (get-universal-time) +cl-to-unix+)))
+         (ut   (+ unix +cl-to-unix+))
+         (d    (multiple-value-list (decode-universal-time ut 0))))
+    ;; sec min hr day mon yr ...
+    (list (first d) (second d) (third d) (fourth d) (fifth d) (sixth d))))
 
 (xdef sin  #'sin)
 (xdef cos  #'cos)
@@ -1305,66 +1301,62 @@ empty-name symbol (`||`) from no token at all."
 (xdef atan #'atan)
 (xdef log  #'log)
 
-(xdef flushout (lambda () (force-output *standard-output*) t))
+(xdef flushout () (force-output *standard-output*) t)
 
-(xdef ssyntax  (lambda (x) (tnil (ssyntax-p x))))
-(xdef ssexpand (lambda (x) (if (ssyntax-p x) (expand-ssyntax x) x)))
+(xdef ssyntax  (x) (tnil (ssyntax-p x)))
+(xdef ssexpand (x) (if (ssyntax-p x) (expand-ssyntax x) x))
 
-(xdef quit (lambda () (sb-ext:exit)))
+(xdef quit () (sb-ext:exit))
 
-(xdef memory (lambda () (sb-kernel:dynamic-usage)))
+(xdef memory () (sb-kernel:dynamic-usage))
 
 ;;;; ---- close / force-close ----
 
-(xdef close
-  (lambda (&rest args)
-    (dolist (p args)
-      (ignore-errors
-        (cond ((typep p 'arc-server-socket) (sb-bsd-sockets:socket-close (ass-sock p)))
-              ((streamp p) (cl:close p))
-              (t nil))))
-    nil))
+(xdef close (&rest args)
+  (dolist (p args)
+    (ignore-errors
+      (cond ((typep p 'arc-server-socket) (sb-bsd-sockets:socket-close (ass-sock p)))
+            ((streamp p) (cl:close p))
+            (t nil))))
+  nil)
 
-(xdef force-close
-  (lambda (&rest args)
-    (dolist (p args)
-      (ignore-errors
-        (cond ((typep p 'arc-server-socket) (sb-bsd-sockets:socket-close (ass-sock p)))
-              ((streamp p) (cl:close p :abort t))
-              (t nil))))
-    nil))
+(xdef force-close (&rest args)
+  (dolist (p args)
+    (ignore-errors
+      (cond ((typep p 'arc-server-socket) (sb-bsd-sockets:socket-close (ass-sock p)))
+            ((streamp p) (cl:close p :abort t))
+            (t nil))))
+  nil)
 
 ;;;; ---- apply / sig / declare / eval / macex ----
 
-(xdef apply
-  (lambda (fn &rest args)
-    (ar-apply fn (ar-apply-args args))))
+(xdef apply (fn &rest args)
+  (ar-apply fn (ar-apply-args args)))
 
 (xdef sig *arc-fn-signatures*)
 
-(xdef declare
-  (lambda (key val)
-    (let ((flag (not (null val)))
-          (k (string-downcase (symbol-name key))))
-      (cond ((string= k "atstrings")      (setf *arc-atstrings*      flag))
-            ((string= k "direct-calls")   (setf *arc-direct-calls*   flag))
-            ((string= k "explicit-flush") (setf *arc-explicit-flush* flag)))
-      val)))
+(xdef declare (key val)
+  (let ((flag (not (null val)))
+        (k (string-downcase (symbol-name key))))
+    (cond ((string= k "atstrings")      (setf *arc-atstrings*      flag))
+          ((string= k "direct-calls")   (setf *arc-direct-calls*   flag))
+          ((string= k "explicit-flush") (setf *arc-explicit-flush* flag)))
+    val))
 
-(xdef eval   (lambda (e) (arc-eval e)))
-(xdef macex  (lambda (e) (ac-macex e)))
-(xdef macex1 (lambda (e) (ac-macex e t)))
+(xdef eval   (e) (arc-eval e))
+(xdef macex  (e) (ac-macex e))
+(xdef macex1 (e) (ac-macex e t))
 
 ;;;; ---- scar / scdr ----
 
-(xdef scar (lambda (x val)
-              (if (stringp x) (setf (char x 0) val) (setf (car x) val))
-              val))
+(xdef scar (x val)
+  (if (stringp x) (setf (char x 0) val) (setf (car x) val))
+  val)
 
-(xdef scdr (lambda (x val)
-              (if (stringp x) (error "Can't set cdr of string")
-                  (setf (cdr x) val))
-              val))
+(xdef scdr (x val)
+  (if (stringp x) (error "Can't set cdr of string")
+      (setf (cdr x) val))
+  val)
 
 ;;;; ---- nil / t (bound in globals for completeness) ----
 
