@@ -751,14 +751,6 @@ empty-name symbol (`||`) from no token at all."
 (xdef cdr #'arc-cdr)
 
 (defun pairwise (pred lst)
-  (cond ((null lst) t)
-        ((null (cdr lst)) t)
-        ((pairwise pred (cdr lst))
-         (not (null (funcall pred (car lst) (cadr lst)))))
-        (t nil)))
-
-;; Reimplementing pairwise correctly
-(defun pairwise (pred lst)
   (cond ((null lst)       t)
         ((null (cdr lst)) t)
         ((null (funcall pred (car lst) (cadr lst))) nil)
