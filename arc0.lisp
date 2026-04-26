@@ -11,13 +11,6 @@
 
 (defun tnil (x) (if x t nil))
 
-(defun arc-sym (name)
-  (intern (if (symbolp name) (arc-sym-key name) name) :arc))
-
-(defun arc-sym= (x name)
-  "Case-insensitive comparison of symbol X to string NAME."
-  (and (symbolp x) (string-equal (symbol-name x) name)))
-
 (defun arc-list-p (x) (or (consp x) (null x)))
 
 (defun arc-imap (f l)
@@ -27,15 +20,33 @@
         (t (funcall f l))))
 
 ;;;; ============================================================
+;;;; Translation from Arc names to CL names and vice-versa
+;;;; ============================================================
+
+(defun cl-sym-key (s)
+  "Normalize any Arc symbol to an uppercase string key for CL globals."
+  (string-upcase (symbol-name s)))
+
+(defun arc-sym-key (s)
+  "Normalize any CL symbol to a lowercase string key for Arc globals."
+  (string-downcase (symbol-name s)))
+
+(defun cl-sym (name)
+  (intern (if (symbolp name) (cl-sym-key name) name) :arc))
+
+(defun arc-sym (name)
+  (intern (if (symbolp name) (arc-sym-key name) name) :arc))
+
+(defun arc-sym= (x name)
+  "Case-insensitive comparison of symbol X to string NAME."
+  (and (symbolp x) (string-equal (symbol-name x) name)))
+
+;;;; ============================================================
 ;;;; Global variable table  (key = lowercase string)
 ;;;; ============================================================
 
 (defvar *arc-globals*       (make-hash-table :test #'equal))
 (defvar *arc-fn-signatures* (make-hash-table :test #'equal))
-
-(defun arc-sym-key (s)
-  "Normalize any CL symbol to a lowercase string key for Arc globals."
-  (string-downcase (symbol-name s)))
 
 (defun arc-global (s)
   (gethash (arc-sym-key s) *arc-globals*))

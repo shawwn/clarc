@@ -345,7 +345,7 @@ empty-name symbol (`||`) from no token at all."
 (defun literal-p (x)
   (or (eq x t) (characterp x) (stringp x) (numberp x) (null x)))
 
-(defun ac (s env)
+(defun ac (s &optional (env nil))
   (cond
     ((stringp s)   (ac-string s env))
     ((literal-p s)  s)
@@ -355,9 +355,10 @@ empty-name symbol (`||`) from no token at all."
     ((and (arc-sym= s "t") (not (lex-p s env))) t)
     ((ssyntax-p s) (ac (expand-ssyntax s) env))
     ((symbolp s)   (ac-var-ref s env))
-    ((arc-car? s #'ssyntax-p)
-     (ac (cons (expand-ssyntax (car s)) (cdr s)) env))
-    ((arc-sym= (arc-car? s) "quote") `',(cadr s))
+    ((arc-car? s #'ssyntax-p) (ac (cons (expand-ssyntax (car s)) (cdr s)) env))
+    ((arc-sym= (arc-car? s) "function") (cl-quoted (cadr s)))
+    ((arc-sym= (arc-caar? s) "function") (mapcar (lambda (x) (ac x env)) s))
+    ((arc-sym= (arc-car? s) "quote") (list 'quote (ac-quoted (cadr s))))
     ((arc-sym= (arc-car? s) "quasiquote") (ac-qq (cadr s) env))
     ((arc-sym= (arc-car? s) "%do") `(progn ,@(ac-body* (cdr s) env)))
     ((arc-sym= (arc-car? s) "if") (ac-if (cdr s) env))
@@ -374,7 +375,39 @@ empty-name symbol (`||`) from no token at all."
     ((consp s) (ac-call (car s) (cdr s) env))
     (t (error "Bad object in expression: ~S" s))))
 
-;;; Atstring expansion
+;;;; ---- Atstring expansion ----
+
+(defun atpos (s i)
+  (cond ((>= i (length s)) nil)
+        ((char= (char s i) #\@)
+         (if (and (< (1+ i) (length s))
+                  (char/= (char s (1+ i)) #\@))
+             i
+             (atpos s (+ i 2))))
+        (t (atpos s (1+ i)))))
+
+(defun unescape-ats (s)
+  (with-output-to-string (out)
+    (loop with i = 0 and len = (length s)
+          while (< i len)
+          do (let ((c (char s i)))
+               (if (and (char= c #\@)
+                        (< (1+ i) len)
+                        (char= (char s (1+ i)) #\@))
+                   (progn (write-char #\@ out) (incf i 2))
+                   (progn (write-char c out)   (incf i)))))))
+
+(defun codestring (s)
+  (let ((i (atpos s 0)))
+    (if i
+        (cons (subseq s 0 i)
+              (let* ((rest (subseq s (1+ i)))
+                     (in   (make-string-input-stream rest))
+                     (expr (arc-read in nil :eof))
+                     (pos  (file-position in)))
+                (cons expr (codestring (subseq rest pos)))))
+        (list s))))
+
 (defun ac-string (s env)
   (if *arc-atstrings*
       (let ((pos (atpos s 0)))
@@ -385,6 +418,27 @@ empty-name symbol (`||`) from no token at all."
                 env)
             (copy-seq (unescape-ats s))))
       (copy-seq s)))
+
+;;;; ---- quoting ----
+
+(defun cl-quoted (x)
+  (cond ((null x) nil)
+        ((eq x t) t)
+        ((consp x)
+         (arc-imap #'cl-quoted x))
+        ((symbolp x)
+         (cl-sym x))
+        (t x)))
+
+(defun ac-quoted (x)
+  (cond ((null x) nil)
+        ((eq x t) t)
+        ((consp x)
+         (arc-imap #'ac-quoted x))
+        ((symbolp x)
+         (arc-sym x))
+        (t x)))
+
 
 ;;;; ---- quasiquote ----
 ;;; We compile Arc quasiquotes to explicit cons/list/append CL code.
@@ -599,41 +653,6 @@ empty-name symbol (`||`) from no token at all."
   (arc-sym (format nil "gs~D" *arc-gensym-count*)))
 
 (xdef uniq #'arc-gensym)
-
-;;;; ============================================================
-;;;; Atstring helpers
-;;;; ============================================================
-
-(defun atpos (s i)
-  (cond ((>= i (length s)) nil)
-        ((char= (char s i) #\@)
-         (if (and (< (1+ i) (length s))
-                  (char/= (char s (1+ i)) #\@))
-             i
-             (atpos s (+ i 2))))
-        (t (atpos s (1+ i)))))
-
-(defun unescape-ats (s)
-  (with-output-to-string (out)
-    (loop with i = 0 and len = (length s)
-          while (< i len)
-          do (let ((c (char s i)))
-               (if (and (char= c #\@)
-                        (< (1+ i) len)
-                        (char= (char s (1+ i)) #\@))
-                   (progn (write-char #\@ out) (incf i 2))
-                   (progn (write-char c out)   (incf i)))))))
-
-(defun codestring (s)
-  (let ((i (atpos s 0)))
-    (if i
-        (cons (subseq s 0 i)
-              (let* ((rest (subseq s (1+ i)))
-                     (in   (make-string-input-stream rest))
-                     (expr (arc-read in nil :eof))
-                     (pos  (file-position in)))
-                (cons expr (codestring (subseq rest pos)))))
-        (list s))))
 
 ;;;; ============================================================
 ;;;; Arc eval / load
