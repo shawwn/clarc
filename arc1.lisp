@@ -59,6 +59,27 @@ empty-name symbol (`||`) from no token at all."
              (t (write-char (read-char stream) buf))))))
      had-vbar)))
 
+(defun cl-package-qualified-p (str)
+  "True if STR has the form pkg::name with non-empty pkg and name.
+We only recognise the double-colon form; single colon stays compose ssyntax."
+  (let ((p (search "::" str)))
+    (and p (> p 0) (< (+ p 2) (length str))
+         ;; reject a second :: in the same token
+         (not (search "::" str :start2 (+ p 2))))))
+
+(defun intern-cl-qualified (str)
+  "Parse pkg::name and look up the existing symbol in the named CL
+package, upcasing both parts to match the standard CL reader. Unlike
+CL's own pkg::name (which interns), we use find-symbol so a typo
+errors out clearly rather than polluting (often locked) CL packages."
+  (let* ((p (search "::" str))
+         (pkg-name (string-upcase (subseq str 0 p)))
+         (sym-name (string-upcase (subseq str (+ p 2))))
+         (pkg (or (find-package pkg-name)
+                  (error "No CL package named ~A in ~A" pkg-name str))))
+    (or (find-symbol sym-name pkg)
+        (error "No symbol named ~A in package ~A (~A)" sym-name pkg-name str))))
+
 (defun arc-intern-token (str)
   "Convert a raw token string to a CL value."
   (cond
@@ -241,6 +262,10 @@ empty-name symbol (`||`) from no token at all."
            ;; Real |...| with an empty content -> the empty-name symbol.
            ((and (string= tok "") had-vbar) (arc-sym ""))
            ((string= tok "") (arc-read-1 stream)) ; shouldn't happen
+           ;; Bare pkg::name interns directly into the named CL package.
+           ;; |pkg::name| keeps the colons literal and stays in :arc.
+           ((and (not had-vbar) (cl-package-qualified-p tok))
+            (intern-cl-qualified tok))
            (t (arc-intern-token tok))))))))
 
 (defun arc-read (stream &optional (eof-error-p t) eof-value)
@@ -358,6 +383,10 @@ empty-name symbol (`||`) from no token at all."
     ((arc-car? s #'ssyntax-p) (ac (cons (expand-ssyntax (car s)) (cdr s)) env))
     ((arc-sym= (arc-car? s) "function") (cl-quoted (cadr s)))
     ((arc-sym= (arc-caar? s) "function") (mapcar (lambda (x) (ac x env)) s))
+    ;; (pkg::fn args...) compiles to a direct CL call -- same path as
+    ;; ((function fn) args...) above, but lets you drop the #'.
+    ((foreign-cl-call-p s env)
+     (cons (car s) (mapcar (lambda (x) (ac x env)) (cdr s))))
     ((arc-sym= (arc-car? s) "quote") (list 'quote (ac-quoted (cadr s))))
     ((arc-sym= (arc-car? s) "quasiquote") (ac-qq (cadr s) env))
     ((arc-sym= (arc-car? s) "%do") `(progn ,@(ac-body* (cdr s) env)))
@@ -421,22 +450,43 @@ empty-name symbol (`||`) from no token at all."
 
 ;;;; ---- quoting ----
 
+;; Symbols already in a non-:arc package (e.g. SB-THREAD:MAKE-SEMAPHORE
+;; written as sb-thread::make-semaphore) pass through unchanged --
+;; only :arc-package symbols are case-normalised through cl-sym/arc-sym.
+
+(defun arc-package-symbol-p (x)
+  (and (symbolp x) (eq (symbol-package x) (find-package :arc))))
+
+(defun foreign-cl-symbol-p (s)
+  "True if S is a symbol from a package other than :arc and not visible
+from :arc through inheritance. Symbols inherited via :use (like cl:=,
+cl:cons) are NOT foreign even though their symbol-package is :common-lisp,
+because Arc-side names resolve to them through find-symbol."
+  (and (symbolp s)
+       (let ((pkg (symbol-package s)))
+         (and pkg
+              (not (eq pkg (find-package :arc)))
+              (not (eq (find-symbol (symbol-name s) :arc) s))))))
+
+(defun foreign-cl-call-p (s env)
+  "True if S is a call form whose head is a foreign CL symbol that
+isn't shadowed by a lexical binding."
+  (and (consp s)
+       (foreign-cl-symbol-p (car s))
+       (not (lex-p (car s) env))))
+
 (defun cl-quoted (x)
   (cond ((null x) nil)
         ((eq x t) t)
-        ((consp x)
-         (arc-imap #'cl-quoted x))
-        ((symbolp x)
-         (cl-sym x))
+        ((consp x)                (arc-imap #'cl-quoted x))
+        ((arc-package-symbol-p x) (cl-sym x))
         (t x)))
 
 (defun ac-quoted (x)
   (cond ((null x) nil)
         ((eq x t) t)
-        ((consp x)
-         (arc-imap #'ac-quoted x))
-        ((symbolp x)
-         (arc-sym x))
+        ((consp x)                (arc-imap #'ac-quoted x))
+        ((arc-package-symbol-p x) (arc-sym x))
         (t x)))
 
 
