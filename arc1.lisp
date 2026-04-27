@@ -59,15 +59,25 @@ empty-name symbol (`||`) from no token at all."
              (t (write-char (read-char stream) buf))))))
      had-vbar)))
 
-(defun arc-intern-token (str)
-  "Convert a raw token string to a CL value."
+(defun arc-intern-token (str &optional had-vbar)
+  "Convert a raw token string to a CL value. If HAD-VBAR is true the
+token came from a |...| segment and case is preserved literally;
+otherwise we apply :invert (matching the readtable), so all-lowercase
+tokens intern with all-uppercase names and round-trip back to lowercase
+when displayed."
   (cond
     ((string= str "") nil)
     ((string= str "nil") nil)
-    ;; Intern t as arc::t (regular bindable symbol) rather than cl:t,
-    ;; so it can be used as a lambda parameter name. ac translates
+    ;; Intern t as arc-user::T (regular bindable symbol) rather than
+    ;; cl:t, so it can be used as a lambda parameter name. ac translates
     ;; free references back to cl:t at expression position.
     ((string= str "t")   (arc-sym 't))
+    ;; Leading-colon -> CL keyword. Lets arc code use CL keyword args
+    ;; directly: (#'make-instance 'point :x 3 :y 4), (#'open path
+    ;; :direction :output), CLOS slot specs, etc. Vbar-quoted tokens
+    ;; (|:foo|) opt out and intern as a regular arc-typed symbol.
+    ((and (not had-vbar) (> (length str) 1) (char= (char str 0) #\:))
+     (intern (arc-invert-case (subseq str 1)) :keyword))
     (t
      ;; Try number first
      (let ((n (ignore-errors
@@ -76,7 +86,27 @@ empty-name symbol (`||`) from no token at all."
                         (*readtable* (copy-readtable nil)))
                     (let ((v (read-from-string str)))
                       (if (numberp v) v nil)))))))
-       (or n (arc-sym str))))))
+       (or n
+           (and (not had-vbar) (arc-try-pkg-qualified str))
+           (intern (if had-vbar str (arc-invert-case str))
+                   :arc-user))))))
+
+(defun arc-try-pkg-qualified (str)
+  "If STR is a `pkg:name` or `pkg::name` token where the prefix names
+a real package, intern NAME in that package and return the symbol;
+otherwise return nil so the caller falls through to ssyntax expansion
+or normal arc-user interning. Both single-colon and double-colon
+forms are accepted: arc reserves single-colon for ssyntax compose,
+but if the prefix happens to name a package the user almost certainly
+meant a CL-style qualifier (`arc:foo`, `cl:expt`, `sb-ext:run-program`)."
+  (let ((pos (position #\: str)))
+    (when (and pos (> pos 0))
+      (let* ((double-p (and (< (1+ pos) (length str))
+                            (char= (char str (1+ pos)) #\:)))
+             (offset (if double-p 2 1))
+             (pkg (find-package (arc-invert-case (subseq str 0 pos)))))
+        (when pkg
+          (intern (arc-invert-case (subseq str (+ pos offset))) pkg))))))
 
 (defun arc-read-string (stream)
   "Read a double-quoted string, handling backslash escapes."
@@ -241,7 +271,7 @@ empty-name symbol (`||`) from no token at all."
            ;; Real |...| with an empty content -> the empty-name symbol.
            ((and (string= tok "") had-vbar) (arc-sym ""))
            ((string= tok "") (arc-read-1 stream)) ; shouldn't happen
-           (t (arc-intern-token tok))))))))
+           (t (arc-intern-token tok had-vbar))))))))
 
 (defun arc-read (stream &optional (eof-error-p t) eof-value)
   (multiple-value-bind (val eof-p) (arc-read-1 stream)
@@ -261,7 +291,12 @@ empty-name symbol (`||`) from no token at all."
                 (string= (symbol-name x) "++")
                 (string= (symbol-name x) "_")))
        (let ((n (symbol-name x)))
-         (has-ssyntax-char-p n (- (length n) 2)))))
+         ;; `::` always means "this is a package-qualifier-style
+         ;; symbol, not ssyntax". Lets foo::bar reach the user as
+         ;; an opaque symbol whether or not `foo` is a real package
+         ;; (the package case is handled in arc-intern-token).
+         (and (not (search "::" n))
+              (has-ssyntax-char-p n (- (length n) 2))))))
 
 (defun has-ssyntax-char-p (str i)
   (and (>= i 0)
@@ -272,7 +307,11 @@ empty-name symbol (`||`) from no token at all."
   (intern (coerce chars 'string) pkg))
 
 (defun chars->value (chars)
-  (arc-intern-token (coerce chars 'string)))
+  ;; chars come from splitting a symbol-name that's already in
+  ;; invert-canonical form (the reader applied invert when interning
+  ;; the original token). Pass had-vbar=t so the sub-token is interned
+  ;; verbatim instead of inverted a second time.
+  (arc-intern-token (coerce chars 'string) t))
 
 (defun sym->chars (x) (coerce (symbol-name x) 'list))
 
@@ -299,28 +338,26 @@ empty-name symbol (`||`) from no token at all."
       (t (error "Unknown ssyntax: ~S" sym)))))
 
 (defun expand-compose (sym)
-  (let ((pkg (sym-pkg sym)))
-    (let ((elts (mapcar
-                 (lambda (tok)
-                   (if (eql (car tok) #\~)
-                       (if (null (cdr tok))
-                           (intern "no" pkg)
-                           `(,(intern "complement" pkg) ,(chars->value (cdr tok))))
-                       (chars->value tok)))
-                 (arc-tokens (lambda (c) (eql c #\:))
-                             (sym->chars sym) nil nil nil))))
-      (if (null (cdr elts))
-          (car elts)
-          (cons (intern "compose" pkg) elts)))))
+  (let ((elts (mapcar
+               (lambda (tok)
+                 (if (eql (car tok) #\~)
+                     (if (null (cdr tok))
+                         (arc-sym 'no)
+                         `(,(arc-sym 'complement) ,(chars->value (cdr tok))))
+                     (chars->value tok)))
+               (arc-tokens (lambda (c) (eql c #\:))
+                           (sym->chars sym) nil nil nil))))
+    (if (null (cdr elts))
+        (car elts)
+        (cons (arc-sym 'compose) elts))))
 
 (defun expand-and (sym)
-  (let ((pkg (sym-pkg sym)))
-    (let ((elts (mapcar #'chars->value
-                        (arc-tokens (lambda (c) (eql c #\&))
-                                    (sym->chars sym) nil nil nil))))
-      (if (null (cdr elts))
-          (car elts)
-          (cons (intern "andf" pkg) elts)))))
+  (let ((elts (mapcar #'chars->value
+                      (arc-tokens (lambda (c) (eql c #\&))
+                                  (sym->chars sym) nil nil nil))))
+    (if (null (cdr elts))
+        (car elts)
+        (cons (arc-sym 'andf) elts))))
 
 (defun expand-sexpr (sym)
   (build-sexpr (reverse (arc-tokens (lambda (c) (or (eql c #\.) (eql c #\!)))
@@ -329,7 +366,7 @@ empty-name symbol (`||`) from no token at all."
 
 (defun build-sexpr (toks orig)
   (cond
-    ((null toks) (intern "get" (sym-pkg orig)))
+    ((null toks) (arc-sym 'get))
     ((null (cdr toks)) (chars->value (car toks)))
     (t (list (build-sexpr (cddr toks) orig)
              (if (eql (cadr toks) #\!)
@@ -342,8 +379,17 @@ empty-name symbol (`||`) from no token at all."
 ;;;; Arc compiler  (ac)
 ;;;; ============================================================
 
+(defvar *cl-quoted-prefer-arc-macros* nil
+  "When true, cl-quoted expands arc macros even when the same name
+exists in CL. Set by Pattern A's macro-detection branch: the args of
+`(#'cl-macro arg ...)` are arc data flowing into a CL macro, so arc
+macros embedded in those args should win. Pattern B (`#'(form)`)
+leaves this nil so the form is interpreted CL-style. Declared up here
+because the let-binding in `ac` needs the symbol to be already special
+at load time -- otherwise the dynamic binding becomes a lexical one.")
+
 (defun literal-p (x)
-  (or (eq x t) (characterp x) (stringp x) (numberp x) (null x)))
+  (or (eq x t) (characterp x) (stringp x) (numberp x) (null x) (keywordp x)))
 
 (defun ac (s &optional (env nil))
   (cond
@@ -357,7 +403,23 @@ empty-name symbol (`||`) from no token at all."
     ((symbolp s)   (ac-var-ref s env))
     ((arc-car? s #'ssyntax-p) (ac (cons (expand-ssyntax (car s)) (cdr s)) env))
     ((arc-sym= (arc-car? s) "function") (cl-quoted (cadr s)))
-    ((arc-sym= (arc-caar? s) "function") (mapcar (lambda (x) (ac x env)) s))
+    ((arc-sym= (arc-caar? s) "function")
+     ;; (#'fn args...) -- direct CL call. Detect CL macros and
+     ;; special operators (let, with-open-file, defclass, loop,
+     ;; handler-case, ...) by looking up the canonical CL symbol;
+     ;; for those, cl-quote the args so binding forms and other
+     ;; syntax-bearing pieces survive intact instead of being
+     ;; arc-evaluated. The args are arc data flowing into a CL
+     ;; macro, so prefer-arc-macros = t lets arc macros like `do`
+     ;; expand even when they collide with CL-named macros.
+     (let* ((head (cadar s))
+            (cl-fn (when (symbolp head) (cl-sym head))))
+       (if (and cl-fn
+                (or (macro-function cl-fn)
+                    (special-operator-p cl-fn)))
+           (let ((*cl-quoted-prefer-arc-macros* t))
+             (cons cl-fn (mapcar #'cl-quoted (cdr s))))
+           (mapcar (lambda (x) (ac x env)) s))))
     ((arc-sym= (arc-car? s) "quote") (list 'quote (ac-quoted (cadr s))))
     ((arc-sym= (arc-car? s) "quasiquote") (ac-qq (cadr s) env))
     ((arc-sym= (arc-car? s) "%do") `(progn ,@(ac-body* (cdr s) env)))
@@ -369,9 +431,18 @@ empty-name symbol (`||`) from no token at all."
     ;; every elt of s, not just the car)
     ((arc-sym= (arc-caar? s) "compose") (ac (decompose (cdar s) (cdr s)) env))
     ((arc-sym= (arc-caar? s) "complement")
-     (ac `(,(intern "no" (sym-pkg (caar s)))
+     (ac `(,(arc-sym 'no)
            (,(cadar s) ,@(cdr s))) env))
     ((arc-sym= (arc-caar? s) "andf") (ac-andf s env))
+    ;; (cl:foo args), (sb-ext:run-program args), (arc::arc-eval args)
+    ;; -- head is in a non-:arc-user package (so the user named a
+    ;; specific package's symbol). Auto-promote to a Pattern A call
+    ;; by wrapping with `function`, so CL function/macro detection
+    ;; happens just like (#'foo args).
+    ((and (consp s) (symbolp (car s))
+          (let ((p (symbol-package (car s))))
+            (and p (not (eq p (find-package :arc-user))))))
+     (ac (cons (list (arc-sym 'function) (car s)) (cdr s)) env))
     ((consp s) (ac-call (car s) (cdr s) env))
     (t (error "Bad object in expression: ~S" s))))
 
@@ -421,11 +492,80 @@ empty-name symbol (`||`) from no token at all."
 
 ;;;; ---- quoting ----
 
+(defun arc-bound-fn-p (s)
+  "True if S names an arc global bound to a plain function (not a
+macro, not a tagged value). These are the heads we want to compile
+as arc-calls inside cl-quoted CL code."
+  (and (symbolp s)
+       (arc-bound-p s)
+       (functionp (arc-global s))))
+
+(defun cl-symbol-known-p (s)
+  "True if S's name corresponds to a CL-exported symbol -- function,
+macro, special op, declaration name (`declare`, `ignore`, `optimize`),
+type, or any other ANSI export. Used to decide whether a call form
+inside cl-quoted should route through CL or be redirected to an arc
+function of the same name."
+  (multiple-value-bind (sym status)
+      (find-symbol (symbol-name s) :common-lisp)
+    (declare (ignore sym))
+    (eq status :external)))
+
 (defun cl-quoted (x)
   (cond ((null x) nil)
         ((eq x t) t)
+        ;; ((function fn) args...) -- a Pattern A call embedded
+        ;; inside a CL form. Unwrap to a direct CL call so things
+        ;; like (#'with-open-file ... (#'read-line s)) work without
+        ;; the inner Pattern A needing to become CL-native syntax.
+        ((arc-sym= (arc-caar? x) "function")
+         (cons (cl-quoted (cadar x))
+               (mapcar #'cl-quoted (cdr x))))
+        ;; ((fn args body...) actuals...) -- arc fn-application
+        ;; arising inside cl-quoted forms after arc macros like
+        ;; `let` / `with` / `do1` expand.
+        ((arc-sym= (arc-caar? x) "fn")
+         (cons (cl-quoted (car x))
+               (mapcar #'cl-quoted (cdr x))))
+        ;; (fn args body...) -- arc lambda. Translate to CL lambda.
+        ;; Handles only the simple-arglist case (a list of plain
+        ;; symbol params); arc's optional / rest / destructuring args
+        ;; would need more work.
+        ((arc-sym= (arc-car? x) "fn")
+         `(lambda ,(cl-quoted (cadr x))
+            ,@(mapcar #'cl-quoted (cddr x))))
+        ;; (head args...) where head names an arc macro -- expand it
+        ;; and recurse. Arc-only macros (`do1`, `with`, `withs`,
+        ;; `w/uniq`) always expand. Arc macros that collide with CL
+        ;; (`do`, `let`, `loop`) only expand when
+        ;; *cl-quoted-prefer-arc-macros* is true -- that is, when the
+        ;; form is an arc subform flowing into a CL macro via Pattern
+        ;; A. Pattern B leaves CL macros alone.
+        ((arc-car? x (lambda (v)
+                       (and (symbolp v)
+                            (ac-macro-p v)
+                            (or *cl-quoted-prefer-arc-macros*
+                                (not (cl-symbol-known-p v))))))
+         (cl-quoted (apply (ac-macro-p (car x)) (cdr x))))
+        ;; %do is the arc-only special form arc macros (notably `do`)
+        ;; expand to. Translate it to CL progn so the CL evaluator can
+        ;; see it.
+        ((arc-sym= (arc-car? x) "%do")
+         `(progn ,@(mapcar #'cl-quoted (cdr x))))
+        ;; (head args...) where head names an arc function and
+        ;; doesn't have a CL counterpart -- compile as an arc-call so
+        ;; arc functions like `prn`, `pr`, `disp` work inside CL macro
+        ;; bodies. CL-fbound names (`+`, `cons`, `format`) still route
+        ;; through CL directly via the consp clause below.
+        ((arc-car? x (lambda (v)
+                       (and (symbolp v)
+                            (arc-bound-fn-p v)
+                            (not (cl-symbol-known-p v)))))
+         `(ar-apply (arc-global-ref ',(arc-sym (car x)))
+                    (list ,@(mapcar #'cl-quoted (cdr x)))))
         ((consp x)
          (arc-imap #'cl-quoted x))
+        ((keywordp x) x)              ; preserve CL keywords verbatim
         ((symbolp x)
          (cl-sym x))
         (t x)))
@@ -435,6 +575,14 @@ empty-name symbol (`||`) from no token at all."
         ((eq x t) t)
         ((consp x)
          (arc-imap #'ac-quoted x))
+        ((keywordp x) x)              ; preserve CL keywords verbatim
+        ;; Symbols already qualified to a non-:arc-user package
+        ;; (cl:symbolp, sb-ext:run-program, arc::arc-eval) keep
+        ;; their package -- the user named it explicitly.
+        ((and (symbolp x)
+              (let ((p (symbol-package x)))
+                (and p (not (eq p (find-package :arc-user))))))
+         x)
         ((symbolp x)
          (arc-sym x))
         (t x)))
@@ -586,7 +734,15 @@ empty-name symbol (`||`) from no token at all."
 ;;;; ---- call / macros ----
 
 (defun ac-var-ref (s env)
-  (if (lex-p s env) s `(arc-global-ref ',s)))
+  (cond ((lex-p s env) s)
+        ;; Symbols outside :arc-user are direct refs (no
+        ;; arc-global lookup). cl:foo, sb-ext:run-program,
+        ;; arc::arc-eval and friends point at the actual symbol
+        ;; the user named.
+        ((let ((p (symbol-package s)))
+           (and p (not (eq p (find-package :arc-user)))))
+         s)
+        (t `(arc-global-ref ',s))))
 
 (defun lex-p (v env) (member v env :test #'eq))
 
@@ -668,12 +824,12 @@ empty-name symbol (`||`) from no token at all."
                               :element-type 'character
                               :external-format :utf-8)
     (let ((path (namestring (truename p)))
-          (prev (arc-global '|script-file*|)))
-      (setf (arc-global '|script-file*|) path)
+          (prev (arc-global 'script-file*)))
+      (setf (arc-global 'script-file*) path)
       (unwind-protect
            (loop
              (let ((x (arc-read p nil :eof)))
                (when (eq x :eof) (return))
                (arc-eval x)))
-        (setf (arc-global '|script-file*|) prev)))))
+        (setf (arc-global 'script-file*) prev)))))
 

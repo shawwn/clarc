@@ -192,7 +192,7 @@ c"
     ;(test? "" "@unset")
     (test? "" "@nil")
     (test? "" "@(list)")
-    (test? "T" "@t")
+    (test? "t" "@t")
     ;(test? "false" "@false")
     ))
 

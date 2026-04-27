@@ -3,7 +3,25 @@
 (defpackage :arc
   (:use :common-lisp))
 
+;;; arc-typed user symbols live in their own package so they can't
+;;; collide with inherited CL exports (e.g. cl:some, cl:complement).
+;;; That collision is what blocks case-folding the arc reader under
+;;; :invert: with :use :common-lisp, an arc token like "some" would
+;;; resolve to cl:some, and ssyntax expansion's (intern "no" pkg) would
+;;; then try to intern in the locked CL package.
+(defpackage :arc-user
+  (:use))
+
 (in-package :arc)
+
+;;; Switch the readtable to :invert so all-lowercase tokens read as
+;;; all-uppercase symbol names (and round-trip back to lowercase on
+;;; print). Mixed-case names are preserved verbatim. This is what
+;;; gives sharc case-sensitive identifiers (`Foo` and `foo` intern as
+;;; different symbols) while keeping conventional lowercase CL code
+;;; (`defun`, `let`, `cons`) resolving to the canonical CL symbols.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (setf (readtable-case *readtable*) :invert))
 
 ;;;; ============================================================
 ;;;; Utilities
@@ -23,19 +41,34 @@
 ;;;; Translation from Arc names to CL names and vice-versa
 ;;;; ============================================================
 
-(defun cl-sym-key (s)
-  "Normalize any Arc symbol to an uppercase string key for CL globals."
-  (string-upcase (symbol-name s)))
+(defun arc-invert-case (str)
+  "Apply CL's :invert transform: all-upper -> all-lower, all-lower ->
+all-upper, mixed-case unchanged. Inverse of itself."
+  (let ((has-upper nil) (has-lower nil))
+    (loop for c across str do
+      (cond ((upper-case-p c) (setf has-upper t))
+            ((lower-case-p c) (setf has-lower t))))
+    (cond ((and has-upper (not has-lower)) (string-downcase str))
+          ((and has-lower (not has-upper)) (string-upcase str))
+          (t str))))
 
 (defun arc-sym-key (s)
-  "Normalize any CL symbol to a lowercase string key for Arc globals."
-  (string-downcase (symbol-name s)))
+  "Hash key for *arc-globals*. Just symbol-name -- no case folding,
+because case-sensitive arc means `Foo` and `foo` are distinct globals."
+  (symbol-name s))
 
 (defun cl-sym (name)
-  (intern (if (symbolp name) (cl-sym-key name) name) :arc))
+  "Intern in :arc (which inherits CL). Name is preserved verbatim:
+under :invert the arc reader already produced the canonical form
+(`car` -> name \"CAR\", which finds cl:car via inheritance), and
+mixed-case names like `MyHelper` should stay distinct from `myhelper`
+when crossing into CL."
+  (intern (if (symbolp name) (symbol-name name) name) :arc))
 
 (defun arc-sym (name)
-  (intern (if (symbolp name) (arc-sym-key name) name) :arc))
+  "Intern an arc-typed symbol in :arc-user, name preserved verbatim.
+Callers passing raw user strings should pre-apply `arc-invert-case`."
+  (intern (if (symbolp name) (symbol-name name) name) :arc-user))
 
 (defun arc-sym= (x name)
   "Case-insensitive comparison of symbol X to string NAME."
@@ -322,18 +355,18 @@
 (defun arc-type (x)
   (cond
     ((arc-tagged-p x)                  (arc-tagged-type x))
-    ((consp x)                         (intern "cons"    :arc))
-    ((null x)                          (intern "sym"     :arc))
-    ((symbolp x)                       (intern "sym"     :arc))
-    ((functionp x)                     (intern "fn"      :arc))
-    ((characterp x)                    (intern "char"    :arc))
-    ((stringp x)                       (intern "string"  :arc))
-    ((and (integerp x) (= x (truncate x))) (intern "int" :arc))
-    ((numberp x)                       (intern "num"     :arc))
-    ((hash-table-p x)                  (intern "table"   :arc))
-    ((and (streamp x) (output-stream-p x)) (intern "output" :arc))
-    ((and (streamp x) (input-stream-p x))  (intern "input"  :arc))
-    ((typep x 'sb-thread:thread)       (intern "thread"  :arc))
+    ((consp x)                         (arc-sym 'cons))
+    ((null x)                          (arc-sym 'sym))
+    ((symbolp x)                       (arc-sym 'sym))
+    ((functionp x)                     (arc-sym 'fn))
+    ((characterp x)                    (arc-sym 'char))
+    ((stringp x)                       (arc-sym 'string))
+    ((and (integerp x) (= x (truncate x))) (arc-sym 'int))
+    ((numberp x)                       (arc-sym 'num))
+    ((hash-table-p x)                  (arc-sym 'table))
+    ((and (streamp x) (output-stream-p x)) (arc-sym 'output))
+    ((and (streamp x) (input-stream-p x))  (arc-sym 'input))
+    ((typep x 'sb-thread:thread)       (arc-sym 'thread))
     (t (error "Unknown type: ~S" x))))
 
 (defun arc-tag (type rep)
@@ -407,7 +440,7 @@
     ((stringp x)    (write-string x port))
     ((characterp x) (write-char x port))
     ((null x)       nil)
-    ((symbolp x)    (write-string (symbol-name x) port))
+    ((symbolp x)    (write-string (arc-invert-case (symbol-name x)) port))
     ((consp x)
      (write-char #\( port)
      (arc-write-val (car x) port)
@@ -431,7 +464,7 @@
     ((characterp x) (write x :stream port))
     ((null x)       (write-string "nil" port))
     ((eq x t)       (write-string "t" port))
-    ((symbolp x)    (write-string (symbol-name x) port))
+    ((symbolp x)    (write-string (arc-invert-case (symbol-name x)) port))
     ((consp x)
      (write-char #\( port)
      (arc-write-val (car x) port)
@@ -482,7 +515,7 @@
       ((characterp x)
        (cond ((string= tname "int")    (char-code x))
              ((string= tname "string") (string x))
-             ((string= tname "sym")    (intern (string x) :arc))
+             ((string= tname "sym")    (intern (arc-invert-case (string x)) :arc-user))
              (t (error "Can't coerce char ~S to ~S" x type))))
       ((and (integerp x) (= x (truncate x)))
        (cond ((string= tname "num")    x)
@@ -498,7 +531,7 @@
              ((string= tname "string") (format nil "~A" x))
              (t (error "Can't coerce num ~S to ~S" x type))))
       ((stringp x)
-       (cond ((string= tname "sym")    (intern x :arc))
+       (cond ((string= tname "sym")    (intern (arc-invert-case x) :arc-user))
              ((string= tname "cons")   (coerce x 'list))
              ((string= tname "char")
               (if (= (length x) 1)
@@ -524,7 +557,7 @@
        (cond ((string= tname "string") "")
              (t (error "Can't coerce nil to ~S" type))))
       ((symbolp x)
-       (cond ((string= tname "string") (symbol-name x))
+       (cond ((string= tname "string") (arc-invert-case (symbol-name x)))
              (t (error "Can't coerce sym ~S to ~S" x type))))
       (t x))))
 
@@ -874,7 +907,7 @@
            (let ((val (arc-eval expr)))
              (arc-write-val val *standard-output*)
              (terpri)
-             (setf (arc-global '|that|)     val)
-             (setf (arc-global '|thatexpr|) expr)))))))
+             (setf (arc-global 'that)     val)
+             (setf (arc-global 'thatexpr) expr)))))))
   (arc-tl2))
 

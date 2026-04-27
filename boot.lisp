@@ -35,7 +35,7 @@
     (arc-vlog "Loading libs.arc...~%")
     (ignore-errors (arc:arc-load (merge-pathnames "libs.arc" arc-dir)))
     (when files
-      (setf (arc::arc-global 'arc::|main-file*|)
+      (setf (arc::arc-global 'arc-user::main-file*)
             (namestring (truename (car (last files))))))
     (cond (files
            (dolist (f files) (arc:arc-load f))
