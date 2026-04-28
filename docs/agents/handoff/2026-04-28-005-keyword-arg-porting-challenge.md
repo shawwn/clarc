@@ -1,6 +1,6 @@
 ---
-name: Keyword arguments — reader fix landed; calling-convention port is the harder problem
-description: Reader now treats `:foo` and `foo:` as CL keywords (commit b3f0153). The bigger open question is how arc-level keyword arguments should *behave* at call sites. CL's calling convention has two notable rough edges (positional must come first; `&rest` + `&key` together force all-keys-or-error), and Scheme/Racket got this part better. Design space sketched here.
+name: Keyword arguments — reader fix landed; call-site reorder dropped
+description: Reader now treats `:foo` and `foo:` as CL keywords (commit b3f0153). Considered a Racket-style call-site reorder rule (`foo: 42` → moved to end as `:foo 42`) but dropped it after the `apply` interaction surfaced cognitive overhead not worth the ergonomic win. CL's positional-first rule stands. Arc-level keyword args design is deferred indefinitely.
 type: project
 ---
 
@@ -180,25 +180,44 @@ Cons: less expressive than CL — can't have a mandatory
 positional with optional keys. (Workaround: use the first key as
 "the main one," or split into two functions.)
 
-## My current lean
+## Decision: do nothing further for now
 
-Option C, but with a sharp eye on real use cases. Most arc code
-doesn't have a complex enough API surface to need positional +
-keyword mixing; when it does, the usual answer is "split it into
-two functions" or "wrap in a helper." Forcing all-or-nothing at
-the language level pushes users toward the right pattern.
+After working through Option B in detail (call-site reorder rule
+where `foo: VALUE` gets moved to the end of the arglist), the
+`apply` interaction killed it. `apply`'s last arg must be the
+trailing list, but a "move keys to end" rule wants to put them
+after the list — opposite directions. The clean version requires
+either special-casing `apply` (and any other trailing-rest forms)
+or accepting that the syntax doesn't apply to indirect calls.
 
-For arc → CL interop (calling `make-thread` and friends), the
-existing CL calling conventions still apply — you write keys
-after positionals at the call site, the reader produces real
-keywords, it works. We don't have to change anything for that
-to function.
+Both are workable but introduce a "two ways to spell keys, depends
+on context" cognitive load that probably isn't worth the
+ergonomic win. For direct calls you'd write `name: "hi"`; for
+`apply` you'd write `:name "hi"` literally. Same value, two
+spellings, with rules about when each is allowed.
 
-But this is exactly the kind of design choice where it's worth
-waiting for a concrete use case rather than committing
-speculatively. The reader change alone gets us interop with
-CL `&key` functions today. Designing arc-level `&key` is
-independent and can wait.
+Final call: **drop the call-site reorder feature entirely.** Arc
+keyword args, when needed, will follow CL's positional-first rule
+(Option A in the original list). The reader change in `b3f0153`
+stays — `:foo` and `foo:` both produce the keyword `:FOO`, which
+is independently useful for CL interop. No further design
+required.
+
+If a future concrete use case demands keyword-first ergonomics,
+revisit then; the most likely path would be **Option C** (arc
+keyword forms are all-keyword by construction — no `&rest`/`&key`
+mixing trap), which avoids the apply pitfall because there's no
+positional-vs-key reordering happening at all.
+
+For arc → CL interop today: write keys after positionals at the
+call site, e.g.:
+
+```arc
+(sb-thread::make-thread (fn () (prn "hi")) name: "hi")
+```
+
+`name:` reads as `:NAME`, lands in keyword-pair position, CL
+parses it normally. Done.
 
 ## Next concrete step
 
@@ -209,11 +228,11 @@ escape hatch is gone in modern SBCL anyway. So the porting
 challenge captured here is independent of the dynamic-scope
 work. Both can proceed separately.
 
-Order of operations stays:
+Order of operations:
 
 1. Arc `let`/`def` lowering to CL `let`/lambda with destructuring
    dispatch (handoff `004`).
 2. `defvar`/`defparam` for dynamic scope (handoff `004`).
-3. Optionally, much later: arc-level keyword argument design
-   (this handoff). Wait for a real use case before picking
-   between A/B/C above.
+3. Arc-level keyword argument design is deferred indefinitely.
+   The reader changes in `b3f0153` are sufficient for CL interop
+   and that's all that's needed right now.
