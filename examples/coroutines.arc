@@ -20,6 +20,13 @@
 ; Run with:  ./examples/coroutines.arc
 ; Or load:   (load "examples/coroutines.arc") (demo)
 
+(= tickrate*    1/2 ; half a second between each tick = 2 FPS
+   numticks*    20  ; how long it runs: 20 ticks * 1/2 = 10s
+   ground*      20) ; anyone outside x=[0..20] is falling
+
+(def report (me . msg)
+  (atomic ; ensure the prn doesn't get split up between threads
+    (apply prn "  " me!name " " msg)))
 
 ; ---- semaphore helpers ----------------------------------------------
 ;
@@ -45,35 +52,36 @@
          (sem-wait a!resume)         ; wait for the first tick
          (after (body-fn a)
            (= a!done t)
-           (prn "  " a!name " done")
-           (sem-post a!parked))))    ; final hand-back to scheduler
+           (report a "done")
+           (sem-post a!parked))))    ; hand back scheduler
     a))
-
-(def delay (self n) ; pause for n ticks
-  (prn "  " self!name ": sleeping till tick " (+ (tick) n))
-  (repeat n (yield self))
-  (prn "  " self!name ": waking up"))
-
-(def yield (self (o ticks))
-  (sem-post self!parked)                 ; "I've parked"
-  (if ticks (delay self ticks))
-  (sem-wait self!resume))                ; wait for next tick
-
-(def step-coro (a)
-  (unless a!done
-    (sem-post a!resume)
-    (sem-wait a!parked)))
 
 (def kill-coro (a)
   (unless a!done
     (= a!done t)
     (errsafe:kill-thread a!thread)))
 
+(def step-coro (a)
+  (unless a!done
+    (sem-post a!resume)
+    (sem-wait a!parked)))
+
+(def yield (a (o ticks))
+  ;; "I've parked"
+  (sem-post a!parked)
+  (if ticks (delay a ticks))
+  ;; wait for next tick
+  (sem-wait a!resume))
+
+(def delay (a n) ; pause for n ticks
+  (repeat n
+    (report a "sleeping at x=" a!x)
+    (yield a)))
 
 ; ---- world / scheduler ----------------------------------------------
 
 (def make-world ()
-  (obj actors nil  solids nil  ground-max 20  tick 0))
+  (obj actors nil  walls nil  tick 0))
 
 (def actors () world*!actors)
 (def tick () world*!tick)
@@ -83,11 +91,11 @@
     (push a world*!actors)
     a))
 
-(def collide (x)
-  (some [is _ x] world*!solids))
+(def collides (x)
+  (some x world*!walls))
 
 (def on-ground (x)
-  (and (>= x 0) (<= x world*!ground-max)))
+  (<= 0 x ground*))
 
 (def tick-world ()
   (++ world*!tick)
@@ -97,57 +105,95 @@
 
 (def run-world (n)
   (repeat n
-    (sleep 1/2)
+    (sleep tickrate*)
     (tick-world))
   (each a (actors)
     (kill-coro a)))
 
+; ---- a celeste-style coroutine ----------------------------------------
 
-; ---- a celeste-style routine ----------------------------------------
+(def reached (me target)
+  (is me!x target))
 
-(def walk-to-exact (self target (o cancel-on-fall t))
-  (prn "  " self!name ": walking " self!x " -> " target)
-  (while (and (no self!dead)
-              (isnt self!x target)
-              (no (collide (+ self!x (if (< self!x target) 1 -1))))
-              (or (no cancel-on-fall) (on-ground self!x)))
-    (++ self!x (if (< self!x target) 1 -1))
-    (prn "    " self!name " at x=" self!x)
-    (yield self))
-  (prn "  " self!name ": stopped at x=" self!x))
+(def behind (me target)
+  (< me!x target))
 
+(def toward (me target)
+  (if (behind me target) 1 -1))
+
+(def falling (me)
+  (~on-ground me!x))
+
+(def wait (me ticks)
+  (report me "sleeping till tick " (+ (tick) ticks))
+  (delay me ticks)
+  (report me "waking up at x=" me!x))
+
+(def finished (me reason)
+  (= me!reason reason)
+  (report me "finished at x=" me!x " (" reason ")"))
+
+(def walk-to (me target (o cancel-on-fall t))
+  (report me "walking from x=" me!x " to x=" target)
+  (point stop
+    (while t
+      ; let other actors run
+      (yield me)
+      (withs (facing (toward me target)
+              next-pos (+ me!x facing))
+        ; stop if we're dead
+        (when me!dead
+          (finished me 'dead)
+          (stop))
+        ; stop if we've reached our target
+        (when (reached me target)
+          (finished me 'reached)
+          (stop))
+        ; stop if we've hit a wall
+        (when (collides next-pos)
+          (finished me 'collision)
+          (stop))
+        ; stop if we're falling
+        (when (and cancel-on-fall (falling me))
+          (finished me 'falling)
+          (stop))
+        ; advance towards target
+        (++ me!x facing)
+        ; report our new position
+        (report me "moved to x=" me!x)))))
 
 ; ---- demo -----------------------------------------------------------
 
 (def demo ()
   (= world* (make-world)
-     world*!solids '(8))
+     world*!walls '(8))
   (spawn 'madeline
-    (fn (self)
-      (= self!x 0)
-      (walk-to-exact self 5)             ; reaches 5 cleanly
-      (yield self 4)                     ; wait 4 ticks
-      (walk-to-exact self 12)))          ; blocked by wall at 8
+    (fn (me)
+      (= me!x 0)
+      (walk-to me 5)    ; reaches 5 cleanly
+      (wait me 4)       ; wait 4 ticks
+      (walk-to me 12))) ; blocked by wall at 8
   (spawn 'badeline
-    (fn (self)
-      (= self!x 22)                      ; starts off the platform
-      (walk-to-exact self 16)))          ; cancels: not on-ground
+    (fn (me)
+      (= me!x 22)       ; starts off the platform
+      (walk-to me 16))) ; cancels: falling
   (spawn 'theo
-    (fn (self)
-      (= self!x 18)
-      (walk-to-exact self 14)
-      (yield self 3)
-      (walk-to-exact self 19)))
-  (spawn 'neo
-    (fn (self)
-      (= self!x 3)
-      (walk-to-exact self 5)
-      (car 42) ; errors without interrupting other actors
-      (walk-to-exact self 10)))
-  (run-world 20)
+    (fn (me)
+      (= me!x 18)
+      (walk-to me 14)
+      (wait me 3)
+      (walk-to me 19)))
+  (spawn 'granny
+    (fn (me)
+      (= me!x 3)
+      (wait me 16)
+      ;; errors won't interrupt other actors
+      (car 42)
+      (walk-to me 10))) ; never runs
+  (run-world numticks*)
   (prn)
   (each a (actors)
-    (prn a!name " final: x=" a!x " done=" a!done)))
+    (report a "final: x=" a!x " " a!reason)))
 
 (when (main)
   (demo))
