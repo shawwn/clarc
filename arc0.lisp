@@ -45,8 +45,8 @@
 ;;;; Global variable table  (key = lowercase string)
 ;;;; ============================================================
 
-(defvar *arc-globals*       (make-hash-table :test #'equal))
-(defvar *arc-fn-signatures* (make-hash-table :test #'equal))
+(defvar *arc-globals*       (make-hash-table :test #'equal :synchronized t))
+(defvar *arc-fn-signatures* (make-hash-table :test #'equal :synchronized t))
 
 (defun arc-global (s)
   (gethash (arc-sym-key s) *arc-globals*))
@@ -663,7 +663,7 @@
 ;;;; ============================================================
 
 (xdef table (&rest args)
-  (let ((h (make-hash-table :test #'equal)))
+  (let ((h (make-hash-table :test #'equal :synchronized t)))
     (when args (arc-call1 (car args) h))
     h))
 
