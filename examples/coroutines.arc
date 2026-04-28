@@ -26,6 +26,31 @@
 ;
 ; Run with:  ./examples/coroutines.arc
 ; Or load:   (load "examples/coroutines.arc") (demo)
+;
+; Contract for coroutine bodies (cooperative scheduling has no
+; preemption, so violating any of these stalls or corrupts the
+; whole world):
+;
+;   - Don't yield while holding atomic or any user-level mutex.
+;     The lock stays held across the park; the next coro that
+;     tries to take it blocks its OS thread and never posts
+;     parked, deadlocking the scheduler.
+;
+;   - Don't run unbounded synchronous work without yielding.
+;     A body that loops without yield (or makes a long blocking
+;     call) starves every other coroutine on every other actor.
+;
+;   - Don't terminate-thread a running coroutine. terminate-thread
+;     is async and forced --- it skips the (after ...) cleanup
+;     and can interrupt mid-write to shared state. Use a
+;     cooperative cancel flag instead: (= c!cancel t) and have
+;     the body check it at each yield. (kill-coro is fine at
+;     world shutdown when nothing is awake.)
+;
+;   - step-coro is scheduler-only. Calling it from a coro body
+;     unparks a second coroutine while the caller is still
+;     running, breaking the "only one coro awake at a time"
+;     invariant that everything else relies on.
 
 (= tickrate*    1/2 ; half a second between each tick = 2 FPS
    numticks*    20  ; how long it runs: 20 ticks * 1/2 = 10s
@@ -100,7 +125,7 @@
 ; (and optionally skip the next n-1 ticks too).  (yield) waits 1 tick,
 ; (yield 3) waits 3 ticks --- matches Celeste's "yield return 3.0f".
 (def yield ((o ticks 1))
-  (let c (my-coro)
+  (let c (or (my-coro) (err "yield called outside a coroutine"))
     (repeat ticks
       (sem-post c!parked)
       (sem-wait c!resume))))
