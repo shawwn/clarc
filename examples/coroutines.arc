@@ -2,13 +2,20 @@
 
 ; A celeste-style coroutine scheduler.
 ;
-; Each game object runs on its own SBCL thread. (yield self) parks the
-; thread on a semaphore; the scheduler ticks one actor at a time by
-; signalling its resume-semaphore and then waiting on its parked-
-; semaphore until the actor either yields again or its body returns.
+; An actor (~ Celeste Entity) owns a list of coroutines (~ Celeste
+; Coroutine Components). Each coroutine runs on its own SBCL thread
+; with its own pair of semaphores. (yield) parks the caller's thread;
+; the scheduler ticks each coroutine of each actor once per tick by
+; signalling the coro's resume-semaphore and then waiting on its
+; parked-semaphore until it yields again or returns.
 ;
-; This means an actor body can be written as straight-line code with
-; ordinary (while ...) loops --- the same shape as Celeste's
+; Multiple coroutines on a single actor advance in parallel within a
+; tick (in add-order), exactly like ComponentList.Update iterating
+; over Coroutine components. A coroutine can spawn more coroutines on
+; the same actor (or on a new one) just by calling add-coro / spawn.
+;
+; This means a coroutine body can be written as straight-line code
+; with ordinary (while ...) loops --- the same shape as Celeste's
 ; IEnumerator DummyWalkToExact:
 ;
 ;   while (!player.Dead
@@ -29,67 +36,97 @@
     (apply prn "  " me!name " " msg)))
 
 ; ---- semaphore helpers ----------------------------------------------
-;
+
 (def sem      ()  (sb-thread::make-semaphore))
 (def sem-wait (s) (sb-thread::wait-on-semaphore s) nil)
 (def sem-post (s) (sb-thread::signal-semaphore s) nil)
 
 ; ---- coroutine primitive --------------------------------------------
 
-; An actor is a table with at least: name, x, dead, done, resume, parked.
-; The body-fn is called once with the actor; when it returns, the
-; coroutine is done.
+; An actor is the Celeste-style Entity: it holds shared state (name,
+; position, dead-flag) and a list of coroutines that read/mutate it.
+(deftem actor
+  name  nil
+  x     0
+  dead  nil
+  coros nil)
 
-(def make-coro (name body-fn)
-  (let a (obj name   name
-              x      0
-              dead   nil
-              done   nil
-              resume (sem)
-              parked (sem))
-    (= a!thread
+; A coro is one independent thread of control attached to an actor.
+; The two semaphores belong to the coroutine, NOT the actor --- with
+; multiple coros per actor, sharing one pair would wake the wrong one.
+(deftem coro
+  actor  nil
+  thread nil
+  done   nil
+  resume (sem)
+  parked (sem))
+
+; Map current-thread -> its coro so (yield) can find its own semaphores
+; without the body having to thread the coro through every call.
+(= coros* (table))
+
+(def my-coro () (coros* (current-thread)))
+
+(def add-coro (a body-fn)
+  (let c (inst 'coro 'actor a)
+    (= c!thread
        (thread
-         (sem-wait a!resume)         ; wait for the first tick
+         (= (coros* (current-thread)) c)
+         (sem-wait c!resume)             ; wait for the first tick
          (after (body-fn a)
-           (= a!done t)
-           (report a "done")
-           (sem-post a!parked))))    ; hand back scheduler
-    a))
+           (= c!done t)
+           (pull c a!coros)
+           (wipe (coros* (current-thread)))
+           (sem-post c!parked))))        ; hand back scheduler
+    (push c a!coros)
+    c))
 
-(def kill-coro (a)
-  (unless a!done
-    (= a!done t)
-    (errsafe:kill-thread a!thread)))
+(def step-coro (c)
+  (unless c!done
+    (sem-post c!resume)
+    (sem-wait c!parked)))
 
-(def step-coro (a)
-  (unless a!done
-    (sem-post a!resume)
-    (sem-wait a!parked)))
+(def kill-coro (c)
+  (unless c!done
+    (= c!done t)
+    (wipe (coros* c!thread))
+    (errsafe:kill-thread c!thread)))
 
-(def yield (a (o ticks))
-  ;; "I've parked"
-  (sem-post a!parked)
-  (if ticks (delay a ticks))
-  ;; wait for next tick
-  (sem-wait a!resume))
+(def kill-coros (a)
+  (whilet c (pop a!coros)
+    (kill-coro c)))
 
-(def delay (a n) ; pause for n ticks
-  (repeat n
-    (report a "sleeping at x=" a!x)
-    (yield a)))
+; called from within a coro body to give up the rest of this tick
+; (and optionally skip the next n-1 ticks too).  (yield) waits 1 tick,
+; (yield 3) waits 3 ticks --- matches Celeste's "yield return 3.0f".
+(def yield ((o ticks 1))
+  (let c (my-coro)
+    (repeat ticks
+      (sem-post c!parked)
+      (sem-wait c!resume))))
+
+; like yield, but reports each sleeping tick (so the demo output shows
+; the actor explicitly waiting instead of going silent)
+(def delay (n)
+  (aand (my-coro) it!actor
+    (repeat n
+      (report it "sleeping at x=" it!x)
+      (yield))))
 
 ; ---- world / scheduler ----------------------------------------------
 
-(def make-world ()
-  (obj actors nil  walls nil  tick 0))
+(deftem world
+  actors nil
+  walls  nil
+  tick   0)
 
 (def actors () world*!actors)
 (def tick () world*!tick)
 
-(def spawn (name body-fn)
-  (let a (make-coro name body-fn)
-    (push a world*!actors)
-    a))
+(def spawn (a body-fn)
+  (add-coro a body-fn)
+  (push a world*!actors)
+  a)
 
 (def collides (x)
   (some x world*!walls))
@@ -101,14 +138,16 @@
   (++ world*!tick)
   (prn "-- tick " (tick) " --")
   (each a (actors)
-    (step-coro a)))
+    ; copy the list -- a coro can mutate a!coros by finishing
+    (each c (copy a!coros)
+      (step-coro c))))
 
 (def run-world (n)
   (repeat n
     (sleep tickrate*)
     (tick-world))
   (each a (actors)
-    (kill-coro a)))
+    (kill-coros a)))
 
 ; ---- a celeste-style coroutine ----------------------------------------
 
@@ -126,7 +165,7 @@
 
 (def wait (me ticks)
   (report me "sleeping till tick " (+ (tick) ticks))
-  (delay me ticks)
+  (delay ticks)
   (report me "waking up at x=" me!x))
 
 (def finished (me reason)
@@ -138,7 +177,7 @@
   (point stop
     (while t
       ; let other actors run
-      (yield me)
+      (yield)
       (withs (facing (toward me target)
               next-pos (+ me!x facing))
         ; stop if we're dead
@@ -165,30 +204,32 @@
 ; ---- demo -----------------------------------------------------------
 
 (def demo ()
-  (= world* (make-world)
-     world*!walls '(8))
-  (spawn 'madeline
+  (= world* (inst 'world 'walls '(8)))
+  (spawn (inst 'actor 'name 'madeline 'x 0)
     (fn (me)
-      (= me!x 0)
+      ; spawn a sibling coroutine on the same actor that ticks
+      ; alongside the main body --- like Celeste's per-image
+      ; wobbleRoutines on AngryOshiro.
+      (add-coro me
+        (fn (me)
+          (while (no me!reason)
+            (report me "(shadow watching x=" me!x ")")
+            (yield 2))))
       (walk-to me 5)    ; reaches 5 cleanly
       (wait me 4)       ; wait 4 ticks
       (walk-to me 12))) ; blocked by wall at 8
-  (spawn 'badeline
+  (spawn (inst 'actor 'name 'badeline 'x 22)
     (fn (me)
-      (= me!x 22)       ; starts off the platform
       (walk-to me 16))) ; cancels: falling
-  (spawn 'theo
+  (spawn (inst 'actor 'name 'theo 'x 18)
     (fn (me)
-      (= me!x 18)
       (walk-to me 14)
       (wait me 3)
       (walk-to me 19)))
-  (spawn 'granny
+  (spawn (inst 'actor 'name 'granny 'x 3)
     (fn (me)
-      (= me!x 3)
       (wait me 16)
-      ;; errors won't interrupt other actors
-      (car 42)
+      (car 42)          ; errors won't interrupt other actors
       (walk-to me 10))) ; never runs
   (run-world numticks*)
   (prn)
