@@ -67,6 +67,26 @@ We only recognise the double-colon form; single colon stays compose ssyntax."
          ;; reject a second :: in the same token
          (not (search "::" str :start2 (+ p 2))))))
 
+(defun arc-keyword-token-p (str)
+  "True if STR is :foo or foo: --- a single leading or trailing colon
+with at least one non-colon char and no other colons in the token.
+Excludes pkg::name (handled elsewhere), bare : / ::, and foo:bar
+(compose ssyntax)."
+  (let ((len (length str)))
+    (and (> len 1)
+         (or (and (char= (char str 0) #\:)
+                  (not (find #\: str :start 1)))
+             (and (char= (char str (1- len)) #\:)
+                  (not (find #\: str :end (1- len))))))))
+
+(defun arc-keyword-from-token (str)
+  "Strip the leading or trailing colon and intern the rest as a CL
+keyword. Upcases to match the standard CL reader."
+  (let ((name (if (char= (char str 0) #\:)
+                  (subseq str 1)
+                  (subseq str 0 (1- (length str))))))
+    (intern (string-upcase name) :keyword)))
+
 (defun intern-cl-qualified (str)
   "Parse pkg::name and look up the existing symbol in the named CL
 package, upcasing both parts to match the standard CL reader. Unlike
@@ -266,6 +286,9 @@ errors out clearly rather than polluting (often locked) CL packages."
            ;; |pkg::name| keeps the colons literal and stays in :arc.
            ((and (not had-vbar) (cl-package-qualified-p tok))
             (intern-cl-qualified tok))
+           ;; :foo and foo: read as the CL keyword :FOO. |:foo| escapes.
+           ((and (not had-vbar) (arc-keyword-token-p tok))
+            (arc-keyword-from-token tok))
            (t (arc-intern-token tok))))))))
 
 (defun arc-read (stream &optional (eof-error-p t) eof-value)
@@ -368,7 +391,8 @@ errors out clearly rather than polluting (often locked) CL packages."
 ;;;; ============================================================
 
 (defun literal-p (x)
-  (or (eq x t) (characterp x) (stringp x) (numberp x) (null x)))
+  (or (eq x t) (characterp x) (stringp x) (numberp x) (null x)
+      (keywordp x)))
 
 (defun ac (s &optional (env nil))
   (cond
