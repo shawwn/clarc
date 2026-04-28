@@ -180,16 +180,15 @@ The other three actors are unchanged in spirit — `granny` replaces
   That makes `(yield 2)` actually three ticks. The fix is `(repeat
   ticks (sem-post …) (sem-wait …))` — n round-trips, n ticks.
 
-- **An actor body errors → the after clause might not run.** Arc's
-  `new-thread` (`arc0.lisp:611`) wraps the body in a `handler-case`
-  that prints the error and exits the thread *without* unwinding —
-  so the `(after …)` cleanup in `add-coro` is skipped. The
-  coroutine never sets `done=t` and the scheduler will hang next
-  time it tries to step it. `granny` doesn't trigger this in the
-  demo only because she errors at tick 17 with three ticks left.
-  Worth wrapping the body call itself in `errsafe` (or doing the
-  `done=t` and `sem-post parked` inside a CL `unwind-protect`-style
-  wrapper) before this is used for anything real.
+- **Errors in the body are clean** — `after` is `unwind-protect`
+  (via `protect` at `arc0.lisp:687-688`), and the `handler-case` in
+  `new-thread` (`arc0.lisp:611`) unwinds the stack on its way to
+  the handler. So every `unwind-protect` cleanup along the way
+  fires: `c!done` is set, `coros*` entry is wiped, final
+  `sem-post c!parked` runs, scheduler unblocks, future
+  `step-coro` calls are no-ops. Granny's `(car 42)` confirms this
+  end-to-end — ticks 18/19/20 still run cleanly after she errors
+  at tick 17.
 
 ## Verified
 
@@ -223,10 +222,38 @@ is the multi-coro evidence — both run inside madeline's tick slot.
 Granny's `(car 42)` still doesn't take down the others, same as
 before.
 
+## Open issue: `coros*` hash race on spawn
+
+The `coros*` global table (`thread → coro`) is a default
+unsynchronised SBCL hash. It's safe at steady state — only the
+single awake coroutine touches its own entry. But at *spawn time*
+the new coroutine thread runs `(= (coros* (current-thread)) c)`
+concurrently with whatever caused the spawn:
+
+- demo setup spawns four threads in quick succession; all four
+  write to `coros*` concurrently;
+- a coroutine that calls `add-coro` mid-body keeps running while
+  its child thread is doing the same write.
+
+Different keys, but SBCL's hash internals (chain pointers, resize
+machinery) aren't safe under that. Doesn't blow up on a 4-actor
+demo, will under load. One-line fix is to wrap the three
+`coros*` access sites in `add-coro` (and `my-coro`) in `atomic`,
+or use `:synchronized t`. Not yet done.
+
+The other thing worth noting in the same area: `kill-coro` uses
+`terminate-thread`, which is async and forced — fine at world
+shutdown when nothing is awake, but if used to kill a running
+coro it can interrupt mid-write and corrupt shared state. The
+cooperative analogue is `(= c!cancel t)` plus a body that checks
+the flag at each yield, which is also how Celeste does
+cancellation.
+
 ## Current state
 
 - `examples/coroutines.arc`: ~240 lines including the demo. Same
   invocation: `./examples/coroutines.arc` or `(load …) (demo)`.
 - No runtime changes — all changes are inside the example.
-- Open issue: error-in-body bypasses the `after` cleanup; not
-  exercised by the current demo but will hang if exercised.
+- Open issue: `coros*` hash isn't safe under concurrent spawn
+  startup; see "Open issue" above. Not yet exercised in a way
+  that breaks the demo.
