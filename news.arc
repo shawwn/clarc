@@ -827,17 +827,17 @@ function vote(node) {
   (w/uniq gc
     `(let ,gc (cache (fn () (* caching* ,time))
                      (fn () (tostring (let ,user nil (w/me ,user ,@body)))))
-       (def ,name (,user)
+       (def ,name ((t ,user me))
          (if ,user
              (w/me ,user ,@body)
              (pr (,gc)))))))
 
 
-(newsop news () (newspage user))
+(newsop news () (newspage))
 
-(newsop ||   () (newspage user))
+(newsop ||   () (newspage))
 
-;(newsop index.html () (newspage user))
+;(newsop index.html () (newspage))
 
 (newscache newspage user 90
   (listpage (msec) (topstories maxend*) nil nil "news"))
@@ -848,7 +848,7 @@ function vote(node) {
     (display-items items label title url 0 perpage* number)))
 
 
-(newsop newest () (newestpage user))
+(newsop newest () (newestpage))
 
 ; Note: dead/deleted items will persist for the remaining life of the 
 ; cached page.  If this were a prob, could make deletion clear caches.
@@ -860,7 +860,7 @@ function vote(node) {
   (retrieve n [cansee _] stories*))
 
 
-(newsop best () (bestpage user))
+(newsop best () (bestpage))
 
 (newscache bestpage user 1000
   (listpage (msec) (beststories maxend*) "best" "Top Links"))
@@ -871,10 +871,10 @@ function vote(node) {
   (bestn n (compare > realscore) (visible stories*)))
 
 
-(newsop noobstories () (noobspage user stories*))
-(newsop noobcomments () (noobspage user comments*))
+(newsop noobstories () (noobspage stories*))
+(newsop noobcomments () (noobspage comments*))
 
-(def noobspage (user source)
+(def noobspage (source)
   (listpage (msec) (noobs maxend* source) "noobs" "New Accounts"))
 
 (def noobs (n source)
@@ -884,7 +884,7 @@ function vote(node) {
   (< (- (user-age i!by) (item-age i)) 2880))
 
 
-(newsop bestcomments () (bestcpage user))
+(newsop bestcomments () (bestcpage))
 
 (newscache bestcpage user 1000
   (listpage (msec) (bestcomments maxend*) 
@@ -1073,12 +1073,12 @@ function vote(node) {
 (def votelink (i whence dir (t user me))
   (tag (a id      (if user (string dir '_ i!id))
           onclick (if user "return vote(this)")
-          href    (vote-url user i dir whence))
+          href    (vote-url i dir whence))
     (if (is dir 'up)
         (out (gentag img src up-url*   border 0 vspace 3 hspace 2))
         (out (gentag img src down-url* border 0 vspace 3 hspace 2)))))
 
-(def vote-url (user i dir whence)
+(def vote-url (i dir whence (t user me))
   (+ "vote?" "for=" i!id
              "&dir=" dir
              (if user (+ "&by=" user "&auth=" (user->cookie* user)))
@@ -2254,7 +2254,7 @@ function vote(node) {
 
 ; User Stats
 
-(newsop leaders () (leaderspage user))
+(newsop leaders () (leaderspage))
 
 (= nleaders* 20)
 
@@ -2312,7 +2312,7 @@ function vote(node) {
 ; implicitly by e.g. changing color of commentlink or by showing the 
 ; no of comments since that user last looked.
 
-(newsop active () (active-page user))
+(newsop active () (active-page))
 
 (newscache active-page user 600
   (listpage (msec) (actives) "active" "Active Threads"))
@@ -2329,7 +2329,7 @@ function vote(node) {
 (def family (i) (cons i (mappend family:item i!kids)))
 
 
-(newsop newcomments () (newcomments-page user))
+(newsop newcomments () (newcomments-page))
 
 (newscache newcomments-page user 60
   (listpage (msec) (visible (firstn maxend* comments*))
@@ -2416,7 +2416,7 @@ first asterisk isn't whitespace.
       (resetpw-page "Passwords should be a least 4 characters long.
                      Please choose another.")
       (do (set-pw (the me) newpw)
-          (newspage (the me)))))
+          (newspage))))
 
 
 ; Scrubrules
