@@ -12,7 +12,7 @@
     (ensure-dir appdir*)
     (ensure-dir (string appdir* user))
     (whitepage
-      (prbold "Prompt")
+      (prbold (link "Prompt" "prompt"))
       (hspace 20)
       (pr user " | ")
       (link "logout")
@@ -24,7 +24,7 @@
               (td (ulink 'edit   (edit-app app)))
               (td (ulink 'run    (run-app  app)))
               (td (hspace 40)
-                  (ulink 'delete (rem-app  app))))))
+                  (ulink 'delete (del-app  app))))))
       (br2)
       (uform (aif (goodname arg!app)
                   (edit-app it)
@@ -43,6 +43,17 @@
   (awhen (app-path app)
     (w/outfile o it 
       (each e exprs (write e o)))))
+
+(def del-app (app)
+  (tab
+    (tr (td)
+        (td (uform (if (is arg!b "Yes")
+                       (rem-app app)
+                       (prompt-page))
+               (prn "Do you want program " app " to be deleted?")
+               (br2)
+               (but "Yes" "b") (sp) (but "No" "b"))))))
+
 
 (def rem-app (app)
   (let file (app-path app)
