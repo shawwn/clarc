@@ -1189,9 +1189,9 @@ function vote(node) {
       (and (~noedit* i!type)
            (editor user)
            (< (item-age i) editor-changetime*))
-      (own-changeable-item user i)))
+      (own-changeable-item i user)))
 
-(def own-changeable-item (user i)
+(def own-changeable-item (i (t user me))
   (and (author i user)
        (~mem 'locked i!keys)
        (no i!deleted)
@@ -1274,7 +1274,7 @@ function vote(node) {
     (save-prof i!by)))
 
 (def candelete (i (t user me))
-  (or (admin user) (own-changeable-item user i)))
+  (or (admin user) (own-changeable-item i user)))
 
 (def deletelink (i whence)
   (when (candelete i)
