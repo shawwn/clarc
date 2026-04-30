@@ -128,8 +128,8 @@
   (= (hpasswords* user) (and pw (shash pw)))
   (save-table hpasswords* hpwfile*))
 
-(def hello-page (user ip)
-  (whitepage (prs "hello" user "at" ip)))
+(def hello-page ()
+  (whitepage (prs "hello" (the me) "at" (the ip))))
 
 (defop login (login-page 'login))
 
