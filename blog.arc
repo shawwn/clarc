@@ -68,8 +68,7 @@
 
 (def edit-page (p)
   (whitepage
-    (vars-form (the me)
-               `((string title ,p!title t t) (text text ,p!text t t))
+    (vars-form `((string title ,p!title t t) (text text ,p!text t t))
                (fn (name val) (= (p name) val))
                (fn () (save-post p)
                       (post-page p)))))

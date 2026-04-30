@@ -32,9 +32,7 @@
     (when u (= (logins* u) req!ip))
     u))
 
-; The req parameter is vestigial: thread-local (the me) replaces
-; (get-user req). Kept for backward compatibility with callers.
-(mac when-umatch (user req . body)
+(mac when-umatch (user . body)
   `(if (is ,user (the me))
        (do ,@body)
        (mismatch-message)))
@@ -42,67 +40,70 @@
 (def mismatch-message ()
   (prn "Dead link: users don't match."))
 
-(mac when-umatch/r (user req . body)
+(mac when-umatch/r (user . body)
   `(if (is ,user (the me))
        (do ,@body)
        "mismatch"))
 
 (defop mismatch req (mismatch-message))
 
-(mac uform (user req after . body)
-  `(aform (fn (,req)
-            (when-umatch ,user ,req
-              ,after))
+(mac uform (user after . body)
+  `(aform (fn (req)
+            (when-umatch ,user ,after))
      ,@body))
 
-(mac urform (user req after . body)
-  `(arform (fn (,req)
-             (when-umatch/r ,user ,req 
-               ,after))
+(mac urform (user after . body)
+  `(arform (fn (req)
+             (when-umatch/r ,user ,after))
      ,@body))
 
 ; Like onlink, but checks that user submitting the request is the
-; same it was generated for.  For extra protection could log the 
+; same it was generated for.  For extra protection could log the
 ; username and ip addr of every genlink, and check if they match.
 
-(mac ulink (user text . body)  
-  (w/uniq req
-    `(linkf ,text (,req) 
-       (when-umatch ,user ,req ,@body))))
+(mac ulink (user text . body)
+  `(linkf ,text (,(uniq))
+     (when-umatch ,user ,@body)))
 
 
 (defop admin req (admin-gate))
 
+; (t me) parameter lets the post-login callback pass the
+; freshly-logged-in user, which is otherwise still nil in the
+; thread-local. w/me propagates the override to admin-page so
+; the read of (the me) inside it sees the right value.
 (def admin-gate ((t me))
-  (if (admin me)
-      (admin-page me)
-      (login-page 'login nil
-                  (fn (u ip) (admin-gate u)))))
+  (w/me me
+    (if (admin me)
+        (admin-page)
+        (login-page 'login nil
+                    (fn (u ip) (admin-gate u))))))
 
 (def admin (u) (and u (mem u admins*)))
 
 (def user-exists (u) (and u (hpasswords* u) u))
 
-(def admin-page (user . msg)
-  (whitepage 
-    (prbold "Admin: ")
-    (hspace 20)
-    (pr user " | ")
-    (w/link (do (logout-user user)
-                (whitepage (pr "Bye " user ".")))
-      (pr "logout"))
-    (when msg (hspace 10) (map pr msg))
-    (br2)
-    (aform (fn (req)
-             (when-umatch user req
-               (with (u (arg req "u") p (arg req "p"))
-                 (if (or (no u) (no p) (is u "") (is p ""))
-                      (pr "Bad data.")
-                     (user-exists u)
-                      (admin-page user "User already exists: " u)
-                      (do (create-acct u p)
-                          (admin-page user))))))
-      (pwfields "create (server) account"))))
+(def admin-page msg
+  (let user (the me)
+    (whitepage
+      (prbold "Admin: ")
+      (hspace 20)
+      (pr user " | ")
+      (w/link (do (logout-user user)
+                  (whitepage (pr "Bye " user ".")))
+        (pr "logout"))
+      (when msg (hspace 10) (map pr msg))
+      (br2)
+      (aform (fn (req)
+               (when-umatch user
+                 (with (u (arg req "u") p (arg req "p"))
+                   (if (or (no u) (no p) (is u "") (is p ""))
+                        (pr "Bad data.")
+                       (user-exists u)
+                        (admin-page "User already exists: " u)
+                        (do (create-acct u p)
+                            (admin-page))))))
+        (pwfields "create (server) account")))))
 
 (def cook-user (user)
   (let id (new-user-cookie)
@@ -394,27 +395,31 @@
 ; a fn f and generates a form such that when submitted (f label newval) 
 ; will be called for each valid value.  Finally done is called.
 
-(def vars-form (user fields f done (o button "update") (o lasts))
-  (taform lasts
-          (if (all [no (_ 4)] fields)
-              (fn (req))
-              (fn (req)
-                (when-umatch user req
-                  (each (k v) req!args
-                    (let name (sym k)
-                      (awhen (find [is (cadr _) name] fields)
-                        ; added sho to fix bug
-                        (let (typ id val sho mod) it
-                          (when (and mod v)
-                            (let newval (readvar typ v fail*)
-                              (unless (is newval fail*)
-                                (f name newval))))))))
-                  (done))))
-     (tab
-       (showvars fields))
-     (unless (all [no (_ 4)] fields)  ; no modifiable fields
-       (br)
-       (submit button))))
+(def vars-form (fields f done (o button "update") (o lasts))
+  ; Capture (the me) at form-generation time so the submit-side
+  ; when-umatch can verify the submitter is the same user who
+  ; received the form.
+  (let user (the me)
+    (taform lasts
+            (if (all [no (_ 4)] fields)
+                (fn (req))
+                (fn (req)
+                  (when-umatch user
+                    (each (k v) req!args
+                      (let name (sym k)
+                        (awhen (find [is (cadr _) name] fields)
+                          ; added sho to fix bug
+                          (let (typ id val sho mod) it
+                            (when (and mod v)
+                              (let newval (readvar typ v fail*)
+                                (unless (is newval fail*)
+                                  (f name newval))))))))
+                    (done))))
+       (tab
+         (showvars fields))
+       (unless (all [no (_ 4)] fields)  ; no modifiable fields
+         (br)
+         (submit button)))))
                 
 (def showvars (fields (o liveurls))
   (each (typ id val view mod question) fields
