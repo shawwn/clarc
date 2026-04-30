@@ -1659,6 +1659,55 @@
       (/ (count test xs) (len xs))))
 
 
+; ---- Thread-local variables ---------------------------------------
+;
+; A per-thread key-value store, with two ergonomic affordances:
+;
+;   (the var)          --- read the current thread's binding for var
+;   (= (the var) val)  --- set it
+;   (w/the var val ...) --- bind for the duration of body, restore after
+;   (w/me val ...)     --- shorthand for (w/the me val ...)
+;
+;   (def f ((t me)) ...)        --- me defaults to (the me) if not passed
+;   (def f ((t local var)) ...) --- local defaults to (the var)
+;
+; Modeled on dang's news.arc thread-local trick (HN id 11242977) for
+; passing per-request context like the current user without threading
+; it through every function signature.
+;
+; (the var) is a macro so the var name is taken literally (no quote at
+; the call site). It expands to a call to the underlying `thread-local`
+; function, which is what setforms-and-friends actually hook into.
+
+(= thread-locals* (table))
+
+(def thread-locals ()
+  (or (thread-locals* (current-thread))
+      (= (thread-locals* (current-thread)) (table))))
+
+(def thread-local (k) ((thread-locals) k))
+
+(defset thread-local (var-form)
+  (let var (cadr var-form)  ; '(quote me) -> me
+    (w/uniq (g h)
+      (list (list g '(thread-locals))
+            `(,g ',var)
+            `(fn (,h) (sref ,g ,h ',var))))))
+
+(mac the (var)
+  `(thread-local ',var))
+
+(mac w/the (var val . body)
+  (w/uniq prev
+    `(let ,prev (the ,var)
+       (= (the ,var) ,val)
+       (after (do ,@body)
+         (= (the ,var) ,prev)))))
+
+(mac w/me (val . body)
+  `(w/the me ,val ,@body))
+
+
 ; any logical reason I can't say (push x (if foo y z)) ?
 ;   eval would have to always ret 2 things, the val and where it came from
 ; idea: implicit tables of tables; setf empty field, becomes table
