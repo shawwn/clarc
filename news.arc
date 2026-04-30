@@ -381,7 +381,7 @@
              (do (set (mature i!id))
                  nil)))))
 
-(def seesdead (user)
+(def seesdead ((t user me))
   (or (and user (uvar user showdead) (no (ignored user)))
       (editor user)))
 
@@ -471,10 +471,10 @@
      (pagetop nil nil ,label)
      (trtd ,@body)))
 
-(def msgpage (user msg (o title))
+(def msgpage (msg (o title))
   (minipage (or title "Message")
     (spanclass admin
-      (center (if (len> msg 80) 
+      (center (if (len> msg 80)
                   (widtable 500 msg)
                   (pr msg))))
     (br2)))
@@ -1501,9 +1501,9 @@ function vote(node) {
             (flink [submit-page user url title showtext text bothblank*])
            (let site (sitename url)
              (or (big-spamsites* site) (recent-spam site)))
-            (flink [msgpage user spammage*])
+            (flink [msgpage spammage*])
            (oversubmitting user ip 'story url)
-            (flink [msgpage user toofast*])
+            (flink [msgpage toofast*])
            (let s (create-story url (process-title title) text user ip)
              (story-ban-test user s ip url)
              (when (ignored user) (kill s 'ignored))
@@ -2001,7 +2001,7 @@ function vote(node) {
       (empty text)
        (flink [addcomment-page parent (the me) whence text retry*])
       (oversubmitting user ip 'comment)
-       (flink [msgpage user toofast*])
+       (flink [msgpage toofast*])
        (atlet c (create-comment parent (md-from-form text) user ip)
          (comment-ban-test user c ip text comment-kill* comment-ignore*)
          (if (bad-user user) (kill c 'ignored/karma))
@@ -2348,7 +2348,7 @@ function vote(node) {
 ; Doc
 
 (defop formatdoc
-  (msgpage (the me) formatdoc* "Formatting Options"))
+  (msgpage formatdoc* "Formatting Options"))
 
 (= formatdoc-url* "formatdoc")
 
