@@ -161,7 +161,7 @@
 (def check-key (u k)
   (and u (mem k (uvar u keys))))
 
-(def author (u i) (is u i!by))
+(def author (i (t u me)) (is u i!by))
 
 
 (= stories* nil comments* nil 
@@ -369,8 +369,8 @@
 
 (def cansee (i (t user me))
   (if i!deleted   (admin user)
-      i!dead      (or (author user i) (seesdead user))
-      (delayed i) (author user i)
+      i!dead      (or (author i) (seesdead user))
+      (delayed i) (author i)
       t))
 
 (let mature (table)
@@ -971,15 +971,15 @@ function vote(node) {
     (tr (tag (td colspan (if i 2 1)))    
         (tag (td class 'subtext)
           (hook 'itemline s user)
-          (itemline s user)
-          (when (in s!type 'story 'poll) (commentlink s user))
-          (editlink s user)
+          (itemline s)
+          (when (in s!type 'story 'poll) (commentlink s))
+          (editlink s)
           (when (apoll s) (addoptlink s user))
           (unless i (flaglink s user whence))
           (killlink s user whence)
           (blastlink s user whence)
           (blastlink s user whence t)
-          (deletelink s user whence)))))
+          (deletelink s whence)))))
 
 (def display-item-number (i)
   (when i (tag (td align 'right valign 'top class 'title)
@@ -990,7 +990,7 @@ function vote(node) {
 (def titleline (s url user whence)
   (tag (td class 'title)
     (if (cansee s)
-        (do (deadmark s user)
+        (do (deadmark s)
             (titlelink s url user)
             (pdflink url)
             (awhen (sitename url)
@@ -1017,7 +1017,7 @@ function vote(node) {
   (let toself (blank url)
     (tag (a href (if toself 
                       (item-url s!id) 
-                     (or (live s) (author user s) (editor user))
+                     (or (live s) (author s) (editor user))
                       url
                       nil)
             rel  (unless (or toself (> (realscore s) follow-threshold*))
@@ -1037,8 +1037,8 @@ function vote(node) {
 (def pseudo-text (i)
   (if i!deleted "[deleted]" "[dead]"))
 
-(def deadmark (i user)
-  (when (and i!dead (seesdead user))
+(def deadmark (i)
+  (when (and i!dead (seesdead))
     (pr " [dead] "))
   (when (and i!deleted (admin user))
     (pr " [deleted] ")))
@@ -1062,7 +1062,7 @@ function vote(node) {
                  ; don't understand why needed, but is, or a new
                  ; page is generated on voting
                  (tag (span id (+ "down_" i!id)))))
-        (author user i)
+        (author i)
          (do (fontcolor orange (pr "*"))
              (br)
              (hspace votewid*))
@@ -1100,7 +1100,7 @@ function vote(node) {
        (or (is dir 'up)
            (and (acomment i)
                 (> (karma user) downvote-threshold*)
-                (no (aand i!parent (author user (item it))))))))
+                (no (aand i!parent (author (item it))))))))
 
 ; Need the by argument or someone could trick logged in users into 
 ; voting something up by clicking on a link.  But a bad guy doesn't 
@@ -1130,20 +1130,20 @@ function vote(node) {
              (logvote ip by i))
          (pr "Can't make that vote."))))
 
-(def itemline (i user)
-  (when (cansee i) 
-    (when (news-type i) (itemscore i user))
-    (byline i user)))
+(def itemline (i)
+  (when (cansee i)
+    (when (news-type i) (itemscore i))
+    (byline i)))
 
-(def itemscore (i (o user))
+(def itemscore (i)
   (tag (span id (+ "score_" i!id))
     (pr (plural (if (is i!type 'pollopt) (realscore i) i!score)
                 "point")))
-  (hook 'itemscore i user))
+  (hook 'itemscore i))
 
 ; redefined later
 
-(def byline (i user)
+(def byline (i)
   (pr " by @(tostring (userlink i!by)) @(text-age:item-age i) "))
 
 (def user-url (user) (+ "user?id=" user))
@@ -1166,8 +1166,8 @@ function vote(node) {
 
 (= show-threadavg* nil)
 
-(def commentlink (i user)
-  (when (cansee i) 
+(def commentlink (i)
+  (when (cansee i)
     (pr bar*)
     (tag (a href (item-url i!id))
       (let n (- (visible-family i) 1)
@@ -1197,19 +1197,19 @@ function vote(node) {
       (own-changeable-item user i)))
 
 (def own-changeable-item (user i)
-  (and (author user i)
+  (and (author i)
        (~mem 'locked i!keys)
        (no i!deleted)
        (or (everchange* i!type)
            (< (item-age i) user-changetime*))))
 
-(def editlink (i user)
+(def editlink (i)
   (when (canedit i)
     (pr bar*)
     (link "edit" (edit-url i))))
 
 (def addoptlink (p user)
-  (when (or (admin user) (author user p))
+  (when (or (admin user) (author p))
     (pr bar*)
     (onlink "add choice" (add-pollopt-page p user))))
 
@@ -1281,14 +1281,13 @@ function vote(node) {
 (def candelete (i (t user me))
   (or (admin user) (own-changeable-item user i)))
 
-(def deletelink (i user whence)
+(def deletelink (i whence)
   (when (candelete i)
     (pr bar*)
     (linkf (if i!deleted "undelete" "delete")
-      (let user (the me)
-        (if (candelete i)
-            (del-confirm-page user i whence)
-            (prn "You can't delete that."))))))
+      (if (candelete i)
+          (del-confirm-page (the me) i whence)
+          (prn "You can't delete that.")))))
 
 ; Undeleting stories could cause a slight inconsistency. If a story
 ; linking to x gets deleted, another submission can take its place in
@@ -1312,9 +1311,9 @@ function vote(node) {
                  (br2)
                  (but "Yes" "b") (sp) (but "No" "b")))))))
 
-(def permalink (story user)
+(def permalink (story)
   (when (cansee story)
-    (pr bar*) 
+    (pr bar*)
     (link "link" (item-url story!id))))
 
 (def logvote (ip user story)
@@ -1376,7 +1375,7 @@ function vote(node) {
         (when (and (is dir 'up) (possible-sockpuppet user))
           (++ i!sockvotes))
         (metastory&adjust-rank i)
-        (unless (or (author user i)
+        (unless (or (author i)
                     (and (is ip i!ip) (~editor user))
                     (is i!type 'pollopt))
           (++ (karma i!by) (case dir up 1 down -1))
@@ -1409,7 +1408,7 @@ function vote(node) {
   (let prev (firstn n (recent-votes-by user))
     (and (is (len prev) n)
          (all (fn ((id sec ip voter dir score))
-                (and (author victim (item id)) (is dir 'down)))
+                (and (author (item id) victim) (is dir 'down)))
               prev))))
 
 ; Ugly to pluck out fourth element.  Should read votes into a vote
@@ -1537,7 +1536,7 @@ function vote(node) {
            (ignored user)
            (< (user-age user) new-age-threshold*)
            (< (karma user) new-karma-threshold*))
-       (len> (recent-items [or (author user _) (is _!ip ip)] 180)
+       (len> (recent-items [or (author _) (is _!ip ip)] 180)
              (if (is kind 'story)
                  (if (bad-user user) 0 1)
                  (if (bad-user user) 1 10)))))
@@ -1776,10 +1775,10 @@ function vote(node) {
       (tag (td class 'default)
         (spanclass comhead
           (itemscore o)
-          (editlink o user)
+          (editlink o)
           (killlink o user whence)
-          (deletelink o user whence)
-          (deadmark o user)))))
+          (deletelink o whence)
+          (deadmark o)))))
 
 
 ; Individual Item Page (= Comments Page of Stories)
@@ -1816,7 +1815,7 @@ function vote(node) {
          here (item-url i!id))
     (longpage user (msec) nil nil title here
       (tab (display-item nil i user here)
-           (display-item-text i user)
+           (display-item-text i)
            (when (apoll i)
              (spacerow 10)
              (tr (td)
@@ -1862,10 +1861,10 @@ function vote(node) {
 (def superparent (i)
   (aif i!parent (superparent:item it) i))
 
-(def display-item-text (s user)
-  (when (and (cansee s) 
+(def display-item-text (s)
+  (when (and (cansee s)
              (in s!type 'story 'poll)
-             (blank s!url) 
+             (blank s!url)
              (~blank s!text))
     (spacerow 2)
     (row "" s!text)))
@@ -1880,7 +1879,7 @@ function vote(node) {
     (if (and i 
              (cansee i)
              (editable-type i)
-             (or (news-type i) (admin user) (author user i)))
+             (or (news-type i) (admin user) (author i)))
         (edit-page user i)
         (pr "No such item."))))
 
@@ -1935,7 +1934,7 @@ function vote(node) {
   (let here (edit-url i)
     (shortpage user nil nil "Edit" here
       (tab (display-item nil i user here)
-           (display-item-text i user))
+           (display-item-text i))
       (br2)
       (vars-form ((fieldfn* i!type) user i)
                  (fn (name val)
@@ -2066,7 +2065,7 @@ function vote(node) {
   (if (and comment-caching*
            astree (no showpar) (no showon)
            (live c)
-           (nor (admin user) (editor user) (author user c))
+           (nor (admin user) (editor user) (author c))
            (< (- maxid* c!id) cc-window*)
            (> (- (seconds) c!time) 60)) ; was 3600
       (pr (cached-comment-body c user whence indent))
@@ -2097,19 +2096,19 @@ function vote(node) {
     (let parent (and (or (no astree) showpar) (c 'parent))
       (tag (div style "margin-top:2px; margin-bottom:-10px; ")
         (spanclass comhead
-          (itemline c user)
-          (permalink c user)
+          (itemline c)
+          (permalink c)
           (when parent
             (when (cansee c) (pr bar*))
             (link "parent" (item-url ((item parent) 'id))))
-          (editlink c user)
+          (editlink c)
           (killlink c user whence)
           (blastlink c user whence)
-          (deletelink c user whence)
+          (deletelink c whence)
           ; a hack to check whence but otherwise need an arg just for this
           (unless (or astree (is whence "newcomments"))
             (flaglink c user whence))
-          (deadmark c user)
+          (deadmark c)
           (when showon
             (pr " | on: ")
             (let s (superparent c)
@@ -2118,7 +2117,7 @@ function vote(node) {
         (br))
       (spanclass comment
         (if (~cansee c)               (pr (pseudo-text c))
-            (nor (live c) (author user c)) (spanclass dead (pr c!text))
+            (nor (live c) (author c)) (spanclass dead (pr c!text))
                                            (fontcolor (comment-color c)
                                              (pr c!text))))
       (when (and astree (cansee c) (live c))
