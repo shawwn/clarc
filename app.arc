@@ -71,7 +71,7 @@
   (if (admin)
       (admin-page)
       (login-page 'login nil
-                  (fn (u ip) (admin-gate)))))
+                  (fn () (admin-gate)))))
 
 (def admin ((t u me)) (and u (mem u admins*)))
 
@@ -180,10 +180,10 @@
   (= (the me) user)
   (if (acons afterward)
       (let (f url) afterward
-        (f user ip)
+        (f)
         url)
       (do (prn)
-          (afterward user ip))))
+          (afterward))))
 
 (def failed-login (switch msg afterward)
   (if (acons afterward)
@@ -666,6 +666,6 @@
          (do ,@body)
          (login-page 'both
                      "You need to be logged in to do that."
-                     (list (fn (u ip))
+                     (list (fn ())
                            (string ',name (reassemble-args (the req))))))))
 
