@@ -846,7 +846,7 @@ function vote(node) {
 (def listpage (t1 items label title (o url label) (o number t))
   (hook 'listpage (the me))
   (longpage (the me) t1 nil label title url
-    (display-items (the me) items label title url 0 perpage* number)))
+    (display-items items label title url 0 perpage* number)))
 
 
 (newsop newest () (newestpage user))
@@ -930,12 +930,12 @@ function vote(node) {
 
 ; Story Display
 
-(def display-items (user items label title whence 
+(def display-items (items label title whence
                     (o start 0) (o end perpage*) (o number))
   (zerotable
     (let n start
       (each i (cut items start end)
-        (display-item (and number (++ n)) i user whence t)
+        (display-item (and number (++ n)) i (the me) whence t)
         (spacerow (if (acomment i) 15 5))))
     (when end
       (let newend (+ end perpage*)
@@ -943,7 +943,7 @@ function vote(node) {
           (spacerow 10)
           (tr (tag (td colspan (if number 2 1)))
               (tag (td class 'title)
-                (morelink display-items 
+                (morelink display-items
                           items label title end newend number))))))))
 
 ; This code is inevitably complex because the More fn needs to know 
@@ -951,15 +951,14 @@ function vote(node) {
 ; the page it generates, like logout and delete links.
 
 (def morelink (f items label title . args)
-  (tag (a href 
+  (tag (a href
           (url-for
             (afnid (fn ()
                      (prn)
-                     (with (url  (url-for it)     ; it bound by afnid
-                            user (the me))
-                       (newslog (the ip) user 'more label)
-                       (longpage user (msec) nil label title url
-                         (apply f user items label title url args))))))
+                     (let url (url-for it)     ; it bound by afnid
+                       (newslog (the ip) (the me) 'more label)
+                       (longpage (the me) (msec) nil label title url
+                         (apply f items label title url args))))))
           rel 'nofollow)
     (pr "More")))
 
@@ -2181,14 +2180,14 @@ function vote(node) {
         (longpage (the me) (msec) nil label title here
           (awhen (keep [and (cansee _) (~subcomment _)]
                        (comments user maxend*))
-            (display-threads (the me) it label title here))))
+            (display-threads it label title here))))
       (prn "No such user.")))
 
-(def display-threads (user comments label title whence
+(def display-threads (comments label title whence
                       (o start 0) (o end threads-perpage*))
-  (tab 
+  (tab
     (each c (cut comments start end)
-      (display-comment-tree c user whence 0 t))
+      (display-comment-tree c (the me) whence 0 t))
     (when end
       (let newend (+ end threads-perpage*)
         (when (and (<= newend maxend*) (< end (len comments)))
@@ -2233,7 +2232,7 @@ function vote(node) {
                     (seesdead me))
                 (aif (keep [and (metastory _) (cansee _)]
                            (submissions user))
-                     (display-items me it label label here 0 perpage* t)))))
+                     (display-items it label label here 0 perpage* t)))))
         (pr "No such user."))))
 
 
@@ -2577,11 +2576,11 @@ first asterisk isn't whitespace.
   (display-selected-items user [retrieve maxend* !dead _] "killed"))
 
 (def display-selected-items (user f whence)
-  (display-items user (f stories*) nil nil whence)
+  (display-items (f stories*) nil nil whence)
   (vspace 35)
   (color-stripe textgray)
   (vspace 35)
-  (display-items user (f comments*) nil nil whence))
+  (display-items (f comments*) nil nil whence))
 
 
 ; Rather useless thus; should add more data.
