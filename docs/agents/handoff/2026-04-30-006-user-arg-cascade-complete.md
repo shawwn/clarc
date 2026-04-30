@@ -1,6 +1,6 @@
 ---
 name: User-arg cascade complete — full sweep across news.arc / app.arc
-description: Meta-summary of the full multi-day refactor that removes the transient `user` parameter from news.arc / app.arc by leaning on `(the me)` and `(the ip)` thread-locals and the `(t user me)` parameter form. Indexes all 14 commits from `4422c22` through `3cd2302`, the layers they touched, the sharp edges discovered, and what was intentionally left alone.
+description: Meta-summary of the full multi-day refactor that removes the transient `user` parameter from news.arc / app.arc by leaning on `(the me)` and `(the ip)` thread-locals and the `(t user me)` parameter form. Indexes all 14 commits from [`4422c22`](https://github.com/shawwn/sharc/commit/4422c22) through [`3cd2302`](https://github.com/shawwn/sharc/commit/3cd2302), the layers they touched, the sharp edges discovered, and what was intentionally left alone.
 type: project
 ---
 
@@ -14,12 +14,12 @@ small-leaf cleanups in newscache pages and `vote-url`. Every commit
 is indexed below; read this file to orient, then jump to the focused
 sub-handoff or commit for detail.
 
-The starting context is in handoff `2026-04-30-001-thread-locals-news-arc-style.md`,
+The starting context is in handoff [`2026-04-30-001-thread-locals-news-arc-style.md`](./2026-04-30-001-thread-locals-news-arc-style.md),
 which landed `(the var)` / `(t var)` and the per-thread hash that
 backs them. Handoffs `002`, `003`, `004` documented the first
 waves; handoff `005` was the multi-day session summary. This doc
 extends the picture forward through the second half (commits
-`5dbb85c` … `3cd2302`).
+[`5dbb85c`](https://github.com/shawwn/sharc/commit/5dbb85c) … [`3cd2302`](https://github.com/shawwn/sharc/commit/3cd2302)).
 
 ## What was the goal
 
@@ -40,8 +40,8 @@ value is fixed at render time, not re-read at submit time.
 
 | File | Aggregate over the cascade |
 |---|---|
-| `app.arc` | `login` refreshes `(the me)` before firing the post-login callback; `uform` / `urform` macros take the user implicitly via render-time `(the me)` capture; `admin-gate` collapsed to `(def admin-gate () ...)`; `hello-page` (default afterward) reads thread-locals; post-login callback contract dropped from `(fn (u ip) ...)` to `(fn () ...)` |
-| `news.arc` | predicates / display chain / page-template macros / security-capturing fnid leaves / action-side helpers / data writers all stop threading user; ~600 call sites swept; `newslog` reads `(the ip)` and `(the me)` itself; `ensure-news-user` reads `(the me)`; all `(hook ...)` calls drop the viewer-user arg; newscache pages take `(t user me)` so newsop callers drop the `user` arg |
+| [`app.arc`](../../../app.arc) | `login` refreshes `(the me)` before firing the post-login callback; `uform` / `urform` macros take the user implicitly via render-time `(the me)` capture; `admin-gate` collapsed to `(def admin-gate () ...)`; `hello-page` (default afterward) reads thread-locals; post-login callback contract dropped from `(fn (u ip) ...)` to `(fn () ...)` |
+| [`news.arc`](../../../news.arc) | predicates / display chain / page-template macros / security-capturing fnid leaves / action-side helpers / data writers all stop threading user; ~600 call sites swept; `newslog` reads `(the ip)` and `(the me)` itself; `ensure-news-user` reads `(the me)`; all `(hook ...)` calls drop the viewer-user arg; newscache pages take `(t user me)` so newsop callers drop the `user` arg |
 
 229/229 tests pass throughout. News server smoke-tested for ~30
 routes anonymous and logged-in after each layer.
@@ -50,32 +50,32 @@ routes anonymous and logged-in after each layer.
 
 ### Layer 0 — Predicate family (2026-04-30, before this session)
 
-- **`4422c22`** — `cansee` / `canvote` / `canedit` / `candelete`
+- **[`4422c22`](https://github.com/shawwn/sharc/commit/4422c22)** — `cansee` / `canvote` / `canedit` / `candelete`
   / `visible` / `cansee-descendant` / `visible-family` take
   `(t user me)`. This is the foundation; every later layer relies
   on these predicates defaulting their user.
 
-- **`5099bba`** — drop now-unused `user` from wrapper functions
+- **[`5099bba`](https://github.com/shawwn/sharc/commit/5099bba)** — drop now-unused `user` from wrapper functions
   whose only use of user was passing it to the predicate family.
 
-- **`faa5919`** — drop user from leaf story selectors
+- **[`faa5919`](https://github.com/shawwn/sharc/commit/faa5919)** — drop user from leaf story selectors
   (`live-story-w/url`, `frontpage-rank`, etc.).
 
-- **`d00cb53`** — drop user from `listpage`; pass `(the me)`
+- **[`d00cb53`](https://github.com/shawwn/sharc/commit/d00cb53)** — drop user from `listpage`; pass `(the me)`
   explicitly to `longpage` / `display-items` (this is reverted /
   generalized in later layers).
 
-- **`5fec670`** — drop user from `display-items` /
+- **[`5fec670`](https://github.com/shawwn/sharc/commit/5fec670)** — drop user from `display-items` /
   `display-threads` / `morelink`.
 
-- **`6d83532`** — `admin-bar` drops user; `longpage` macro stops
+- **[`6d83532`](https://github.com/shawwn/sharc/commit/6d83532)** — `admin-bar` drops user; `longpage` macro stops
   forwarding `,gu` to it.
 
 These layers are documented in detail in handoffs `002`, `003`,
 `004` and the `005` session summary. The eight-commit breakdown
 in `004` is the cleanest reference for that wave.
 
-### Layer 1 — Login + uform/urform (commit `5dbb85c`)
+### Layer 1 — Login + uform/urform (commit [`5dbb85c`](https://github.com/shawwn/sharc/commit/5dbb85c))
 
 Two changes that unlocked the rest:
 
@@ -101,7 +101,7 @@ Two changes that unlocked the rest:
 `(t me)` + `w/me` workaround (admin-gate's only consumer) is
 retired.
 
-### Layer 2 — urform-rooted helpers (commit `13331a8`)
+### Layer 2 — urform-rooted helpers (commit [`13331a8`](https://github.com/shawwn/sharc/commit/13331a8))
 
 The functions invoked by `urform` / `uform` and the page wrappers
 that contain those forms. All drop their `user` parameter:
@@ -124,7 +124,7 @@ All flink-bracket closures inside these were updated too. The
 post-login callback in `submit-login-warning` no longer needs
 `(t me)` + `w/me` because of the Layer 1 login fix.
 
-### Layer 3 — Display chain & page macros (commit `56382e0`)
+### Layer 3 — Display chain & page macros (commit [`56382e0`](https://github.com/shawwn/sharc/commit/56382e0))
 
 The big one. Three sub-layers:
 
@@ -159,7 +159,7 @@ closure capture:
   `comment-login-warning`, `newsadmin-page`
 - `note-baditem`, `ignore-edit`, `fieldfn*` table entries
 
-### Layer 4 — Thread-local plumbing (commit `8243200`)
+### Layer 4 — Thread-local plumbing (commit [`8243200`](https://github.com/shawwn/sharc/commit/8243200))
 
 Generalize the thread-local read pattern across the rest of the
 plumbing:
@@ -175,7 +175,7 @@ plumbing:
 - The vote-login callback simplifies further: `canvote i dir`,
   `vote-for (the me) i dir`, `logvote i`.
 
-### Layer 5 — Action helpers & data writers (commit `1779c15`)
+### Layer 5 — Action helpers & data writers (commit [`1779c15`](https://github.com/shawwn/sharc/commit/1779c15))
 
 Mirror of Layer 3, but on the write/action side rather than the
 display side.
@@ -200,7 +200,7 @@ display side.
 `process-story`, `process-poll`, `process-comment`, `add-pollopt`
 themselves drop their ip parameters.
 
-### Layer 6 — Small-leaf cleanups (commit `3cd2302`)
+### Layer 6 — Small-leaf cleanups (commit [`3cd2302`](https://github.com/shawwn/sharc/commit/3cd2302))
 
 - newscache pages take `(t user me)`; callers drop the explicit
   user arg (`(newspage user)` → `(newspage)`).
@@ -286,7 +286,7 @@ here so a future agent doesn't have to rediscover them:
 
 ## What's left, intentionally
 
-After commit `3cd2302`, the remaining `user` references in
+After commit [`3cd2302`](https://github.com/shawwn/sharc/commit/3cd2302), the remaining `user` references in
 news.arc / app.arc break down as:
 
 | Category | Count | Why kept |
@@ -310,35 +310,35 @@ accessors is clearer than implicit.
 
 In commit order:
 
-1. **`4422c22`** — predicates take `(t user me)`
-2. **`5099bba`** — drop user from wrappers
-3. **`faa5919`** — drop user from leaf story selectors
-4. **`d00cb53`** — drop user from `listpage`
-5. **`5fec670`** — drop user from `display-items` / `display-threads` / `morelink`
-6. **`6d83532`** — drop user from `admin-bar`
+1. **[`4422c22`](https://github.com/shawwn/sharc/commit/4422c22)** — predicates take `(t user me)`
+2. **[`5099bba`](https://github.com/shawwn/sharc/commit/5099bba)** — drop user from wrappers
+3. **[`faa5919`](https://github.com/shawwn/sharc/commit/faa5919)** — drop user from leaf story selectors
+4. **[`d00cb53`](https://github.com/shawwn/sharc/commit/d00cb53)** — drop user from `listpage`
+5. **[`5fec670`](https://github.com/shawwn/sharc/commit/5fec670)** — drop user from `display-items` / `display-threads` / `morelink`
+6. **[`6d83532`](https://github.com/shawwn/sharc/commit/6d83532)** — drop user from `admin-bar`
 7. *(handoff `004` — sub-summary of #1–6)*
 8. *(handoff `005` — multi-day session summary)*
-9. **`5dbb85c`** — `login` refreshes `(the me)`; uform/urform read it
-10. **`13331a8`** — drop user from urform/uform-rooted helpers
-11. **`56382e0`** — drop user from display chain and page-template macros
-12. **`8243200`** — thread-local plumbing for newslog, hooks, callbacks
-13. **`1779c15`** — drop user/ip from action helpers and data writers
-14. **`3cd2302`** — small-leaf cleanups
+9. **[`5dbb85c`](https://github.com/shawwn/sharc/commit/5dbb85c)** — `login` refreshes `(the me)`; uform/urform read it
+10. **[`13331a8`](https://github.com/shawwn/sharc/commit/13331a8)** — drop user from urform/uform-rooted helpers
+11. **[`56382e0`](https://github.com/shawwn/sharc/commit/56382e0)** — drop user from display chain and page-template macros
+12. **[`8243200`](https://github.com/shawwn/sharc/commit/8243200)** — thread-local plumbing for newslog, hooks, callbacks
+13. **[`1779c15`](https://github.com/shawwn/sharc/commit/1779c15)** — drop user/ip from action helpers and data writers
+14. **[`3cd2302`](https://github.com/shawwn/sharc/commit/3cd2302)** — small-leaf cleanups
 
 ## Related handoffs
 
-- `2026-04-28-004-dynamic-scope-design.md` — designed-but-not-implemented
+- [`2026-04-28-004-dynamic-scope-design.md`](./2026-04-28-004-dynamic-scope-design.md) — designed-but-not-implemented
   real CL dynamic scope. The thread-local approach used in this
   cascade is the alternative that actually shipped.
-- `2026-04-30-001-thread-locals-news-arc-style.md` — implementation
+- [`2026-04-30-001-thread-locals-news-arc-style.md`](./2026-04-30-001-thread-locals-news-arc-style.md) — implementation
   of `(the var)` / `(t var)` primitives. The foundation.
-- `2026-04-30-002-news-arc-thread-local-refactor.md` — first
+- [`2026-04-30-002-news-arc-thread-local-refactor.md`](./2026-04-30-002-news-arc-thread-local-refactor.md) — first
   sweep of srv/app/blog/prompt/news using the thread-locals.
-- `2026-04-30-003-arg-defop-fnid-thunk-refactor.md` — `arg!foo`,
+- [`2026-04-30-003-arg-defop-fnid-thunk-refactor.md`](./2026-04-30-003-arg-defop-fnid-thunk-refactor.md) — `arg!foo`,
   form-macro-bodies-as-expressions, `defop` drops `req`.
-- `2026-04-30-004-dang-user-subject-cascade.md` — eight-commit
+- [`2026-04-30-004-dang-user-subject-cascade.md`](./2026-04-30-004-dang-user-subject-cascade.md) — eight-commit
   breakdown of the predicate-family cascade (Layer 0 above).
-- `2026-04-30-005-session-summary-coroutines-thread-locals.md` —
+- [`2026-04-30-005-session-summary-coroutines-thread-locals.md`](./2026-04-30-005-session-summary-coroutines-thread-locals.md) —
   multi-day session summary covering coroutines, thread-locals,
   and the start of the user-arg cascade.
 - (this doc): `2026-04-30-006-user-arg-cascade-complete.md`
