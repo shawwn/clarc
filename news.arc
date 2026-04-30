@@ -635,7 +635,7 @@ function vote(node) {
     (pr "&nbsp;|&nbsp;"))
   (if user
       (rlinkf 'logout (req)
-        (when-umatch/r user req
+        (when-umatch/r user
           (logout-user user)
           whence))
       (onlink "login"
@@ -653,7 +653,7 @@ function vote(node) {
 
 (mac defopt (name parm test msg . body)
   `(defop ,name ,parm
-     (if (,test (get-user ,parm))
+     (if (,test (the me))
          (do ,@body)
          (login-page 'both (+ "Please log in" ,msg ".")
                      (list (fn (u ip) (ensure-news-user u))
@@ -671,7 +671,7 @@ function vote(node) {
 (mac opexpand (definer name parms . body)
   (w/uniq gr
     `(,definer ,name ,gr
-       (with (user (get-user ,gr) ip (,gr 'ip))
+       (with (user (the me) ip (the ip))
          (with ,(and parms (mappend [list _ (list 'arg gr (string _))]
                                     parms))
            (newslog ip user ',name ,@parms)
@@ -700,9 +700,9 @@ function vote(node) {
 
 ; News Admin
 
-(defopa newsadmin req 
-  (let user (get-user req)
-    (newslog req!ip user 'newsadmin)
+(defopa newsadmin req
+  (let user (the me)
+    (newslog (the ip) user 'newsadmin)
     (newsadmin-page user)))
 
 ; Note that caching* is reset to val in source when restart server.
@@ -718,19 +718,18 @@ function vote(node) {
 
 (def newsadmin-page (user)
   (shortpage user nil nil "newsadmin" "newsadmin"
-    (vars-form user 
-               (nad-fields)
+    (vars-form (nad-fields)
                (fn (name val)
                  (case name
                    caching            (= caching* val)
                    comment-kill       (todisk comment-kill* val)
                    comment-ignore     (todisk comment-ignore* val)
-                   lightweights       (todisk lightweights* (memtable val))
-                   ))
-               (fn () (newsadmin-page user))) 
+                   lightweights       (todisk lightweights* (memtable val))))
+               (fn () (newsadmin-page user)))
+
     (br2)
     (aform (fn (req)
-             (with (user (get-user req) subject (arg req "id"))
+             (with (user (the me) subject (arg req "id"))
                (if (profile subject)
                    (do (killallby subject)
                        (submitted-page user subject))
@@ -738,7 +737,7 @@ function vote(node) {
       (single-input "" 'id 20 "kill all by"))
     (br2)
     (aform (fn (req)
-             (let user (get-user req)
+             (let user (the me)
                (set-ip-ban user (arg req "ip") t)
                (admin&newsadmin-page user)))
       (single-input "" 'ip 20 "ban ip"))))
@@ -765,9 +764,8 @@ function vote(node) {
 
 (def profile-form (user subject)
   (let prof (profile subject) 
-    (vars-form user
-               (user-fields user subject)
-               (fn (name val) 
+    (vars-form (user-fields user subject)
+               (fn (name val)
                  (when (and (is name 'ignore) val (no prof!ignore))
                    (log-ignore user subject 'profile))
                  (= (prof name) val))
@@ -965,8 +963,8 @@ function vote(node) {
             (afnid (fn (req)
                      (prn)
                      (with (url  (url-for it)     ; it bound by afnid
-                            user (get-user req))
-                       (newslog req!ip user 'more label)
+                            user (the me))
+                       (newslog (the ip) user 'more label)
                        (longpage user (msec) nil label title url
                          (apply f user items label title url args))))))
           rel 'nofollow)
@@ -1294,7 +1292,7 @@ function vote(node) {
   (when (candelete user i)
     (pr bar*)
     (linkf (if i!deleted "undelete" "delete") (req)
-      (let user (get-user req)
+      (let user (the me)
         (if (candelete user i)
             (del-confirm-page user i whence)
             (prn "You can't delete that."))))))
@@ -1309,10 +1307,10 @@ function vote(node) {
   (minipage "Confirm"
     (tab 
       ; link never used so not testable but think correct
-      (display-item nil i user (flink [del-confirm-page (get-user _) i whence]))
+      (display-item nil i user (flink [del-confirm-page (the me) i whence]))
       (spacerow 20)
       (tr (td)
-          (td (urform user req
+          (td (urform user
                       (do (when (candelete user i)
                             (= i!deleted (is (arg req "b") "Yes"))
                             (save-item i))
@@ -1446,13 +1444,13 @@ function vote(node) {
 (def submit-page (user (o url) (o title) (o showtext) (o text "") (o msg))
   (minipage "Submit"
     (pagemessage msg)
-    (urform user req
-            (process-story (get-user req)
+    (urform user
+            (process-story (the me)
                            (clean-url (arg req "u"))
                            (striptags (arg req "t"))
                            showtext
                            (and showtext (md-from-form (arg req "x") t))
-                           req!ip)
+                           (the ip))
       (tab
         (row "title"  (input "t" title 50))
         (if prefer-url*
@@ -1696,12 +1694,12 @@ function vote(node) {
 (def newpoll-page (user (o title "Poll: ") (o text "") (o opts "") (o msg))
   (minipage "New Poll"
     (pagemessage msg)
-    (urform user req
-            (process-poll (get-user req)
+    (urform user
+            (process-poll (the me)
                           (striptags (arg req "t"))
                           (md-from-form (arg req "x") t)
                           (striptags (arg req "o"))
-                          req!ip)
+                          (the ip))
       (tab   
         (row "title"   (input "t" title 50))
         (row "text"    (textarea "x" 4 50 (only.pr text)))
@@ -1746,8 +1744,8 @@ function vote(node) {
 
 (def add-pollopt-page (p user)
   (minipage "Add Poll Choice"
-    (urform user req
-            (do (add-pollopt user p (striptags (arg req "x")) req!ip)
+    (urform user
+            (do (add-pollopt user p (striptags (arg req "x")) (the ip))
                 (item-url p!id))
       (tab
         (row "text" (textarea "x" 4 50))
@@ -1942,9 +1940,8 @@ function vote(node) {
       (tab (display-item nil i user here)
            (display-item-text i user))
       (br2)
-      (vars-form user
-                 ((fieldfn* i!type) user i)
-                 (fn (name val) 
+      (vars-form ((fieldfn* i!type) user i)
+                 (fn (name val)
                    (unless (ignore-edit user i name val)
                      (when (and (is name 'dead) val (no i!dead))
                        (log-kill i user))
@@ -1974,7 +1971,7 @@ function vote(node) {
   (minipage "Add Comment"
     (pagemessage msg)
     (tab
-      (let here (flink [addcomment-page parent (get-user _) whence text msg])
+      (let here (flink [addcomment-page parent (the me) whence text msg])
         (display-item nil parent user here))
       (spacerow 10)
       (row "" (comment-form parent user whence text)))))
@@ -1986,8 +1983,8 @@ function vote(node) {
 (def comment-form (parent user whence (o text))
   (tarform 1800
            (fn (req)
-             (when-umatch/r user req
-               (process-comment user parent (arg req "text") req!ip whence)))
+             (when-umatch/r user
+               (process-comment user parent (arg req "text") (the ip) whence)))
     (textarea "text" 6 60  
       (aif text (prn (unmarkdown it))))
     (when (and noob-comment-msg* (noob user))
@@ -2006,7 +2003,7 @@ function vote(node) {
   (if (no user)
        (flink [comment-login-warning parent whence text])
       (empty text)
-       (flink [addcomment-page parent (get-user _) whence text retry*])
+       (flink [addcomment-page parent (the me) whence text retry*])
       (oversubmitting user ip 'comment)
        (flink [msgpage user toofast*])
        (atlet c (create-comment parent (md-from-form text) user ip)
@@ -2354,7 +2351,7 @@ function vote(node) {
 ; Doc
 
 (defop formatdoc req
-  (msgpage (get-user req) formatdoc* "Formatting Options"))
+  (msgpage (the me) formatdoc* "Formatting Options"))
 
 (= formatdoc-url* "formatdoc")
 
@@ -2411,7 +2408,7 @@ first asterisk isn't whitespace.
 
 ; Reset PW
 
-(defopg resetpw req (resetpw-page (get-user req)))
+(defopg resetpw req (resetpw-page (the me)))
 
 (def resetpw-page (user (o msg))
   (minipage "Reset Password"
@@ -2423,7 +2420,7 @@ first asterisk isn't whitespace.
              (pr ". Otherwise you could lose your account if you mistype 
                   your new password.")))
     (br2)
-    (uform user req (try-resetpw user (arg req "p"))
+    (uform user (try-resetpw user (arg req "p"))
       (single-input "New password: " 'p 20 "reset" t))))
 
 (def try-resetpw (user newpw)
@@ -2437,7 +2434,7 @@ first asterisk isn't whitespace.
 ; Scrubrules
 
 (defopa scrubrules req
-  (scrub-page (get-user req) scrubrules*))
+  (scrub-page (the me) scrubrules*))
 
 ; If have other global alists, generalize an alist edit page.
 ; Or better still generalize vars-form.
@@ -2445,7 +2442,7 @@ first asterisk isn't whitespace.
 (def scrub-page (user rules (o msg nil))
   (minipage "Scrubrules"
     (when msg (pr msg) (br2))
-    (uform user req
+    (uform user
            (with (froms (lines (arg req "from"))
                   tos   (lines (arg req "to")))
              (if (is (len froms) (len tos))
