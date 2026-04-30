@@ -480,10 +480,9 @@ c"
     (test? 'a (the test-tl)))
   (test? 'outer (the test-tl)))
 
-(define-test thread-local-w/me
-  ;; w/me is shorthand for (w/the me ...)
+(define-test thread-local-w/the-me
   (= (the me) 'baseline)
-  (w/me 'overridden
+  (w/the me 'overridden
     (test? 'overridden (the me)))
   (test? 'baseline (the me)))
 
