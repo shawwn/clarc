@@ -144,9 +144,9 @@
 (def ensure-news-user ()
   (profile (me)))
 
-(def save-votes (u) (save-table (votes* u) (+ votedir* u)))
+(def save-votes ((t u me)) (save-table (votes* u) (+ votedir* u)))
 
-(def save-prof  (u) (save-table (profs* u) (+ profdir* u)))
+(def save-prof  ((t u me)) (save-table (profs* u) (+ profdir* u)))
 
 (mac uvar (u k) `((profile ,u) ',k))
 
@@ -1501,9 +1501,9 @@ function vote(node) {
              (maybe-ban-ip s)
              "newest"))))
 
-(def submit-item (i (t user me))
-  (push i!id (uvar user submitted))
-  (save-prof user)
+(def submit-item (i)
+  (push i!id (uvar (me) submitted))
+  (save-prof)
   (vote-for i))
 
 (def recent-spam (site)
