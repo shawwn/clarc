@@ -32,38 +32,35 @@
                     (prompt-page "Bad name.")))
         (tab (row "name:" (input "app") (submit "create app")))))))
 
-(def app-path (user app) 
+(def app-path (app (t user me))
   (and user app (+ appdir* user "/" app)))
 
-(def read-app (user app)
-  (aand (app-path user app) 
+(def read-app (app)
+  (aand (app-path app)
         (file-exists it)
         (readfile it)))
 
-(def write-app (user app exprs)
-  (awhen (app-path user app)
+(def write-app (app exprs)
+  (awhen (app-path app)
     (w/outfile o it 
       (each e exprs (write e o)))))
 
-(def rem-app (app (t me))
-  (let file (app-path me app)
+(def rem-app (app)
+  (let file (app-path app)
     (if (file-exists file)
         (do (rmfile file)
             (prompt-page "Program " app " deleted."))
         (prompt-page "No such app."))))
 
-(def edit-app (app (t me))
+(def edit-app (app)
   (whitepage
-    (pr "user: " me " app: " app)
+    (pr "user: " (me) " app: " app)
     (br2)
-    (aform (if (me me)
-               (do (when (is arg!cmd "save")
-                     (write-app me app (readall arg!exprs)))
-                   (prompt-page))
-               (login-page 'both nil
-                           (fn () (prompt-page))))
+    (uform (do (when (is arg!cmd "save")
+                 (write-app app (readall arg!exprs)))
+               (prompt-page))
       (textarea "exprs" 10 82
-        (pprcode (read-app me app)))
+        (pprcode (read-app app)))
       (br2)
       (buts 'cmd "save" "cancel"))))
 
@@ -72,18 +69,18 @@
     (ppr e)
     (pr "\n\n")))
 
-(def view-app (app (t me))
+(def view-app (app)
   (whitepage
-    (pr "user: " me " app: " app)
+    (pr "user: " (me) " app: " app)
     (br2)
-    (tag xmp (pprcode (read-app me app)))))
+    (tag xmp (pprcode (read-app app)))))
 
-(def run-app (app (t me))
-  (let exprs (read-app me app)
+(def run-app (app)
+  (let exprs (read-app app)
     (if exprs
         (on-err (fn (c) (pr "Error: " (details c)))
           (fn () (map eval exprs)))
-        (prompt-page "Error: No application " app " for user " me))))
+        (prompt-page "Error: No application " app " for user " (me)))))
 
 (wipe repl-history*)
 
