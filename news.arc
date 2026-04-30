@@ -369,8 +369,8 @@
 
 (def cansee (i (t user me))
   (if i!deleted   (admin user)
-      i!dead      (or (author i) (seesdead user))
-      (delayed i) (author i)
+      i!dead      (or (author i user) (seesdead user))
+      (delayed i) (author i user)
       t))
 
 (let mature (table)
@@ -1095,7 +1095,7 @@ function vote(node) {
        (or (is dir 'up)
            (and (acomment i)
                 (> (karma user) downvote-threshold*)
-                (no (aand i!parent (author (item it))))))))
+                (no (aand i!parent (author (item it) user)))))))
 
 ; Need the by argument or someone could trick logged in users into 
 ; voting something up by clicking on a link.  But a bad guy doesn't 
@@ -1192,7 +1192,7 @@ function vote(node) {
       (own-changeable-item user i)))
 
 (def own-changeable-item (user i)
-  (and (author i)
+  (and (author i user)
        (~mem 'locked i!keys)
        (no i!deleted)
        (or (everchange* i!type)
@@ -1369,7 +1369,7 @@ function vote(node) {
         (when (and (is dir 'up) (possible-sockpuppet user))
           (++ i!sockvotes))
         (metastory&adjust-rank i)
-        (unless (or (author i)
+        (unless (or (author i user)
                     (and (is ip i!ip) (~editor user))
                     (is i!type 'pollopt))
           (++ (karma i!by) (case dir up 1 down -1))
