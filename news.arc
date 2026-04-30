@@ -841,12 +841,12 @@ function vote(node) {
 ;(newsop index.html () (newspage user))
 
 (newscache newspage user 90
-  (listpage user (msec) (topstories maxend*) nil nil "news"))
+  (listpage (msec) (topstories maxend*) nil nil "news"))
 
-(def listpage (user t1 items label title (o url label) (o number t))
-  (hook 'listpage user)
-  (longpage user t1 nil label title url
-    (display-items user items label title url 0 perpage* number)))
+(def listpage (t1 items label title (o url label) (o number t))
+  (hook 'listpage (the me))
+  (longpage (the me) t1 nil label title url
+    (display-items (the me) items label title url 0 perpage* number)))
 
 
 (newsop newest () (newestpage user))
@@ -855,7 +855,7 @@ function vote(node) {
 ; cached page.  If this were a prob, could make deletion clear caches.
 
 (newscache newestpage user 40
-  (listpage user (msec) (newstories maxend*) "new" "New Links" "newest"))
+  (listpage (msec) (newstories maxend*) "new" "New Links" "newest"))
 
 (def newstories (n)
   (retrieve n [cansee _] stories*))
@@ -864,7 +864,7 @@ function vote(node) {
 (newsop best () (bestpage user))
 
 (newscache bestpage user 1000
-  (listpage user (msec) (beststories maxend*) "best" "Top Links"))
+  (listpage (msec) (beststories maxend*) "best" "Top Links"))
 
 ; As no of stories gets huge, could test visibility in fn sent to best.
 
@@ -876,7 +876,7 @@ function vote(node) {
 (newsop noobcomments () (noobspage user comments*))
 
 (def noobspage (user source)
-  (listpage user (msec) (noobs maxend* source) "noobs" "New Accounts"))
+  (listpage (msec) (noobs maxend* source) "noobs" "New Accounts"))
 
 (def noobs (n source)
   (retrieve n [and (cansee _) (bynoob _)] source))
@@ -888,7 +888,7 @@ function vote(node) {
 (newsop bestcomments () (bestcpage user))
 
 (newscache bestcpage user 1000
-  (listpage user (msec) (bestcomments maxend*) 
+  (listpage (msec) (bestcomments maxend*) 
             "best comments" "Best Comments" "bestcomments" nil))
 
 (def bestcomments (n)
@@ -918,7 +918,7 @@ function vote(node) {
 
 (def savedpage (user)
   (if (or (is (the me) user) (admin))
-      (listpage (the me) (msec)
+      (listpage (msec)
                 (sort (compare < item-age) (voted-stories user))
                "saved" "Saved Links" (saved-url user))
       (pr "Can't display that.")))
@@ -2323,7 +2323,7 @@ function vote(node) {
 (newsop active () (active-page user))
 
 (newscache active-page user 600
-  (listpage user (msec) (actives) "active" "Active Threads"))
+  (listpage (msec) (actives) "active" "Active Threads"))
 
 (def actives ((o n maxend*) (o consider 2000))
   (visible (rank-stories n consider (memo active-rank))))
@@ -2340,7 +2340,7 @@ function vote(node) {
 (newsop newcomments () (newcomments-page user))
 
 (newscache newcomments-page user 60
-  (listpage user (msec) (visible (firstn maxend* comments*))
+  (listpage (msec) (visible (firstn maxend* comments*))
             "comments" "New Comments" "newcomments" nil))
 
 
@@ -2473,7 +2473,7 @@ first asterisk isn't whitespace.
       (let ban (car (banned-sites* site))
         (tr (tdr (when deads
                    (onlink (len deads)
-                           (listpage user (msec) deads
+                           (listpage (msec) deads
                                      nil (+ "killed at " site) "badsites"))))
             (tdr (when deads (pr (round (days-since ((car deads) 'time))))))
             (td site)
@@ -2526,10 +2526,10 @@ first asterisk isn't whitespace.
                                 (max (aif (car (goods ip)) it!time 0) 
                                      (aif (car (bads  ip)) it!time 0)))))))
             (tdr (onlink (len (bads ip))
-                         (listpage user (msec) (bads ip)
+                         (listpage (msec) (bads ip)
                                    nil (+ "dead from " ip) "badips")))
             (tdr (onlink (len (goods ip))
-                         (listpage user (msec) (goods ip)
+                         (listpage (msec) (goods ip)
                                    nil (+ "live from " ip) "badips")))
             (td (each u (subs ip)
                   (userlink u nil) 
