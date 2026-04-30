@@ -47,11 +47,15 @@
 
 (defop mismatch (mismatch-message))
 
-(mac uform (user after . body)
-  `(aform (when-umatch ,user ,after) ,@body))
+(mac uform (after . body)
+  (w/uniq g
+    `(let ,g (the me)
+       (aform (when-umatch ,g ,after) ,@body))))
 
-(mac urform (user after . body)
-  `(arform (when-umatch/r ,user ,after) ,@body))
+(mac urform (after . body)
+  (w/uniq g
+    `(let ,g (the me)
+       (arform (when-umatch/r ,g ,after) ,@body))))
 
 ; Like onlink, but checks that user submitting the request is the
 ; same it was generated for.  For extra protection could log the
@@ -63,16 +67,11 @@
 
 (defop admin (admin-gate))
 
-; (t me) parameter lets the post-login callback pass the
-; freshly-logged-in user, which is otherwise still nil in the
-; thread-local. w/me propagates the override to admin-page so
-; the read of (the me) inside it sees the right value.
-(def admin-gate ((t me))
-  (w/me me
-    (if (admin me)
-        (admin-page)
-        (login-page 'login nil
-                    (fn (u ip) (admin-gate u))))))
+(def admin-gate ()
+  (if (admin)
+      (admin-page)
+      (login-page 'login nil
+                  (fn (u ip) (admin-gate)))))
 
 (def admin ((t u me)) (and u (mem u admins*)))
 
@@ -178,6 +177,7 @@
 (def login (user ip cookie afterward)
   (= (logins* user) ip)
   (prcookie cookie)
+  (= (the me) user)
   (if (acons afterward)
       (let (f url) afterward
         (f user ip)

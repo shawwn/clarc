@@ -1301,8 +1301,7 @@ function vote(node) {
       (display-item nil i user (flink [del-confirm-page (the me) i whence]))
       (spacerow 20)
       (tr (td)
-          (td (urform user
-                      (do (when (candelete i)
+          (td (urform (do (when (candelete i)
                             (= i!deleted (is arg!b "Yes"))
                             (save-item i))
                           whence)
@@ -1435,8 +1434,7 @@ function vote(node) {
 (def submit-page (user (o url) (o title) (o showtext) (o text "") (o msg))
   (minipage "Submit"
     (pagemessage msg)
-    (urform user
-            (process-story (the me)
+    (urform (process-story (the me)
                            (clean-url arg!u)
                            (striptags arg!t)
                            showtext
@@ -1689,8 +1687,7 @@ function vote(node) {
 (def newpoll-page (user (o title "Poll: ") (o text "") (o opts "") (o msg))
   (minipage "New Poll"
     (pagemessage msg)
-    (urform user
-            (process-poll (the me)
+    (urform (process-poll (the me)
                           (striptags arg!t)
                           (md-from-form arg!x t)
                           (striptags arg!o)
@@ -1739,8 +1736,7 @@ function vote(node) {
 
 (def add-pollopt-page (p user)
   (minipage "Add Poll Choice"
-    (urform user
-            (do (add-pollopt user p (striptags arg!x) (the ip))
+    (urform (do (add-pollopt (the me) p (striptags arg!x) (the ip))
                 (item-url p!id))
       (tab
         (row "text" (textarea "x" 4 50))
@@ -2415,7 +2411,7 @@ first asterisk isn't whitespace.
              (pr ". Otherwise you could lose your account if you mistype 
                   your new password.")))
     (br2)
-    (uform user (try-resetpw user arg!p)
+    (uform (try-resetpw (the me) arg!p)
       (single-input "New password: " 'p 20 "reset" t))))
 
 (def try-resetpw (user newpw)
@@ -2437,13 +2433,12 @@ first asterisk isn't whitespace.
 (def scrub-page (user rules (o msg nil))
   (minipage "Scrubrules"
     (when msg (pr msg) (br2))
-    (uform user
-           (with (froms (lines arg!from)
+    (uform (with (froms (lines arg!from)
                   tos   (lines arg!to))
              (if (is (len froms) (len tos))
                  (do (todisk scrubrules* (map list froms tos))
-                     (scrub-page user scrubrules* "Changes saved."))
-                 (scrub-page user rules "To and from should be same length.")))
+                     (scrub-page (the me) scrubrules* "Changes saved."))
+                 (scrub-page (the me) rules "To and from should be same length.")))
       (pr "From: ")
       (tag (textarea name 'from 
                      cols (apply max 20 (map len (map car rules)))
