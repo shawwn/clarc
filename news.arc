@@ -360,8 +360,8 @@
   (when ranked-stories*
     (adjust-rank (ranked-stories* (rand (min 50 (len ranked-stories*)))))))
 
-(def topstories (user n (o threshold front-threshold*))
-  (retrieve n 
+(def topstories (n (o threshold front-threshold*))
+  (retrieve n
             [and (>= (realscore _) threshold) (cansee _)]
             ranked-stories*))
 
@@ -841,7 +841,7 @@ function vote(node) {
 ;(newsop index.html () (newspage user))
 
 (newscache newspage user 90
-  (listpage user (msec) (topstories user maxend*) nil nil "news"))
+  (listpage user (msec) (topstories maxend*) nil nil "news"))
 
 (def listpage (user t1 items label title (o url label) (o number t))
   (hook 'listpage user)
@@ -855,20 +855,20 @@ function vote(node) {
 ; cached page.  If this were a prob, could make deletion clear caches.
 
 (newscache newestpage user 40
-  (listpage user (msec) (newstories user maxend*) "new" "New Links" "newest"))
+  (listpage user (msec) (newstories maxend*) "new" "New Links" "newest"))
 
-(def newstories (user n)
+(def newstories (n)
   (retrieve n [cansee _] stories*))
 
 
 (newsop best () (bestpage user))
 
 (newscache bestpage user 1000
-  (listpage user (msec) (beststories user maxend*) "best" "Top Links"))
+  (listpage user (msec) (beststories maxend*) "best" "Top Links"))
 
 ; As no of stories gets huge, could test visibility in fn sent to best.
 
-(def beststories (user n)
+(def beststories (n)
   (bestn n (compare > realscore) (visible stories*)))
 
 
@@ -876,9 +876,9 @@ function vote(node) {
 (newsop noobcomments () (noobspage user comments*))
 
 (def noobspage (user source)
-  (listpage user (msec) (noobs user maxend* source) "noobs" "New Accounts"))
+  (listpage user (msec) (noobs maxend* source) "noobs" "New Accounts"))
 
-(def noobs (user n source)
+(def noobs (n source)
   (retrieve n [and (cansee _) (bynoob _)] source))
 
 (def bynoob (i)
@@ -888,10 +888,10 @@ function vote(node) {
 (newsop bestcomments () (bestcpage user))
 
 (newscache bestcpage user 1000
-  (listpage user (msec) (bestcomments user maxend*) 
+  (listpage user (msec) (bestcomments maxend*) 
             "best comments" "Best Comments" "bestcomments" nil))
 
-(def bestcomments (user n)
+(def bestcomments (n)
   (bestn n (compare > realscore) (visible comments*)))
 
 
@@ -2323,9 +2323,9 @@ function vote(node) {
 (newsop active () (active-page user))
 
 (newscache active-page user 600
-  (listpage user (msec) (actives user) "active" "Active Threads"))
+  (listpage user (msec) (actives) "active" "Active Threads"))
 
-(def actives (user (o n maxend*) (o consider 2000))
+(def actives ((o n maxend*) (o consider 2000))
   (visible (rank-stories n consider (memo active-rank))))
 
 (= active-threshold* 1500)
