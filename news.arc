@@ -874,7 +874,7 @@ function vote(node) {
   (listpage (msec) (noobs maxend* source) "noobs" "New Accounts"))
 
 (def noobs (n source)
-  (retrieve n [and (cansee _) (bynoob _)] source))
+  (retrieve n [cansee&bynoob _] source))
 
 (def bynoob (i)
   (< (- (user-age i!by) (item-age i)) 2880))
@@ -919,7 +919,7 @@ function vote(node) {
       (pr "Can't display that.")))
 
 (def voted-stories (user)
-  (keep [and (astory _) (cansee _)]
+  (keep [astory&cansee _]
         (map item (keys:votes user))))
 
 
@@ -2218,7 +2218,7 @@ function vote(node) {
           (if (or (no (ignored user))
                   (me user)
                   (seesdead))
-              (aif (keep [and (metastory _) (cansee _)]
+              (aif (keep [metastory&cansee _]
                          (submissions user))
                    (display-items it label label here 0 perpage* t)))))
       (pr "No such user.")))
