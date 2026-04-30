@@ -426,23 +426,23 @@
 
 (= pagefns* nil)
 
-(mac fulltop (user lid label title whence . body)
-  (w/uniq (gu gi gl gt gw)
-    `(with (,gu ,user ,gi ,lid ,gl ,label ,gt ,title ,gw ,whence)
+(mac fulltop (lid label title whence . body)
+  (w/uniq (gi gl gt gw)
+    `(with (,gi ,lid ,gl ,label ,gt ,title ,gw ,whence)
        (npage (+ this-site* (if ,gt (+ bar* ,gt) ""))
-         (if (check-procrast ,gu)
-             (do (pagetop 'full ,gi ,gl ,gt ,gu ,gw)
-                 (hook 'page ,gu ,gl)
+         (if (check-procrast)
+             (do (pagetop 'full ,gi ,gl ,gt ,gw)
+                 (hook 'page (the me) ,gl)
                  ,@body)
-             (row (procrast-msg ,gu ,gw)))))))
+             (row (procrast-msg ,gw)))))))
 
-(mac longpage (user t1 lid label title whence . body)
-  (w/uniq (gu gt gi)
-    `(with (,gu ,user ,gt ,t1 ,gi ,lid)
-       (fulltop ,gu ,gi ,label ,title ,whence
+(mac longpage (t1 lid label title whence . body)
+  (w/uniq gt
+    `(let ,gt ,t1
+       (fulltop ,lid ,label ,title ,whence
          (trtd ,@body)
          (trtd (vspace 10)
-               (color-stripe (main-color ,gu))
+               (color-stripe (main-color))
                (br)
                (center
                  (hook 'longfoot)
@@ -462,8 +462,8 @@
   (tag (table width "100%" cellspacing 0 cellpadding 1)
     (tr (tdcolor c))))
 
-(mac shortpage (user lid label title whence . body)
-  `(fulltop ,user ,lid ,label ,title ,whence 
+(mac shortpage (lid label title whence . body)
+  `(fulltop ,lid ,label ,title ,whence
      (trtd ,@body)))
 
 (mac minipage (label . body)
@@ -573,14 +573,14 @@ function vote(node) {
 
 (= sand (color 246 246 239) textgray (gray 130))
 
-(def main-color (user) 
+(def main-color ((t user me))
   (aif (and user (uvar user topcolor))
        (hex>color it)
        site-color*))
 
-(def pagetop (switch lid label (o title) (o user) (o whence))
+(def pagetop (switch lid label (o title) (o whence))
 ; (tr (tdcolor black (vspace 5)))
-  (tr (tdcolor (main-color user)
+  (tr (tdcolor (main-color)
         (tag (table border 0 cellpadding 0 cellspacing 0 width "100%"
                     style "padding:2px")
           (tr (gen-logo)
@@ -589,13 +589,13 @@ function vote(node) {
                   (spanclass pagetop
                     (tag b (link this-site* "news"))
                     (hspace 10)
-                    (toprow user label))))
+                    (toprow label))))
              (if (is switch 'full)
                  (tag (td style "text-align:right;padding-right:4px;")
-                   (spanclass pagetop (topright user whence)))
+                   (spanclass pagetop (topright whence)))
                  (tag (td style "line-height:12pt; height:10px;")
                    (spanclass pagetop (prbold label))))))))
-  (map [_ user] pagefns*)
+  (map [_ (the me)] pagefns*)
   (spacerow 10))
 
 (def gen-logo ()
@@ -610,10 +610,10 @@ function vote(node) {
 
 (= welcome-url* "welcome")
 
-(def toprow (user label)
-  (w/bars 
+(def toprow (label (t user me))
+  (w/bars
     (when (noob user)
-      (toplink "welcome" welcome-url* label)) 
+      (toplink "welcome" welcome-url* label))
     (toplink "new" "newest" label)
     (when user
       (toplink "threads" (threads-url user) label))
@@ -628,8 +628,8 @@ function vote(node) {
   (tag-if (is name label) (span class 'topsel)
     (link name dest)))
 
-(def topright (user whence (o showkarma t))
-  (when user 
+(def topright (whence (o showkarma t) (t user me))
+  (when user
     (userlink user nil)
     (when showkarma (pr  "&nbsp;(@(karma user))"))
     (pr "&nbsp;|&nbsp;"))
@@ -639,8 +639,8 @@ function vote(node) {
           (logout-user user)
           whence))
       (onlink "login"
-        (login-page 'both nil 
-                    (list (fn (u ip) 
+        (login-page 'both nil
+                    (list (fn (u ip)
                             (ensure-news-user u)
                             (newslog ip u 'top-login))
                           whence)))))
@@ -679,25 +679,24 @@ function vote(node) {
 
 (mac adop (name parms . body)
   (w/uniq g
-    `(opexpand defopa ,name ,parms 
+    `(opexpand defopa ,name ,parms
        (let ,g (string ',name)
-         (shortpage user nil ,g ,g ,g
+         (shortpage nil ,g ,g ,g
            ,@body)))))
 
 (mac edop (name parms . body)
   (w/uniq g
-    `(opexpand defope ,name ,parms 
+    `(opexpand defope ,name ,parms
        (let ,g (string ',name)
-         (shortpage user nil ,g ,g ,g
+         (shortpage nil ,g ,g ,g
            ,@body)))))
 
 
 ; News Admin
 
 (defopa newsadmin
-  (let user (the me)
-    (newslog (the ip) user 'newsadmin)
-    (newsadmin-page user)))
+  (newslog (the ip) (the me) 'newsadmin)
+  (newsadmin-page))
 
 ; Note that caching* is reset to val in source when restart server.
 
@@ -710,8 +709,8 @@ function vote(node) {
 ; Need a util like vars-form for a collection of variables.
 ; Or could generalize vars-form to think of places (in the setf sense).
 
-(def newsadmin-page (user)
-  (shortpage user nil nil "newsadmin" "newsadmin"
+(def newsadmin-page ()
+  (shortpage nil nil "newsadmin" "newsadmin"
     (vars-form (nad-fields)
                (fn (name val)
                  (case name
@@ -719,19 +718,18 @@ function vote(node) {
                    comment-kill       (todisk comment-kill* val)
                    comment-ignore     (todisk comment-ignore* val)
                    lightweights       (todisk lightweights* (memtable val))))
-               (fn () (newsadmin-page user)))
+               (fn () (newsadmin-page)))
 
     (br2)
     (aform (let subject arg!id
              (if (profile subject)
                  (do (killallby subject)
                      (submitted-page subject))
-                 (admin&newsadmin-page (the me))))
+                 (admin&newsadmin-page)))
       (single-input "" 'id 20 "kill all by"))
     (br2)
-    (aform (let user (the me)
-             (set-ip-ban user arg!ip t)
-             (admin&newsadmin-page user))
+    (aform (do (set-ip-ban (the me) arg!ip t)
+               (admin&newsadmin-page))
       (single-input "" 'ip 20 "ban ip"))))
 
 
@@ -744,7 +742,7 @@ function vote(node) {
 
 (def user-page (user)
   (let here (user-url user)
-    (shortpage (the me) nil nil (+ "Profile: " user) here
+    (shortpage nil nil (+ "Profile: " user) here
       (profile-form user)
       (br2)
       (when (some astory:item (uvar user submitted))
@@ -827,10 +825,10 @@ function vote(node) {
 (mac newscache (name user time . body)
   (w/uniq gc
     `(let ,gc (cache (fn () (* caching* ,time))
-                     (fn () (tostring (let ,user nil ,@body))))
-       (def ,name (,user) 
-         (if ,user 
-             (do ,@body) 
+                     (fn () (tostring (let ,user nil (w/me ,user ,@body)))))
+       (def ,name (,user)
+         (if ,user
+             (w/me ,user ,@body)
              (pr (,gc)))))))
 
 
@@ -845,7 +843,7 @@ function vote(node) {
 
 (def listpage (t1 items label title (o url label) (o number t))
   (hook 'listpage (the me))
-  (longpage (the me) t1 nil label title url
+  (longpage t1 nil label title url
     (display-items items label title url 0 perpage* number)))
 
 
@@ -896,7 +894,7 @@ function vote(node) {
 
 
 (newsop lists () 
-  (longpage user (msec) nil "lists" "Lists" "lists"
+  (longpage (msec) nil "lists" "Lists" "lists"
     (sptab
       (row (link "best")         "Highest voted recent links.")
       (row (link "active")       "Most active current discussions.")
@@ -935,7 +933,7 @@ function vote(node) {
   (zerotable
     (let n start
       (each i (cut items start end)
-        (display-item (and number (++ n)) i (the me) whence t)
+        (display-item (and number (++ n)) i whence t)
         (spacerow (if (acomment i) 15 5))))
     (when end
       (let newend (+ end perpage*)
@@ -957,27 +955,27 @@ function vote(node) {
                      (prn)
                      (let url (url-for it)     ; it bound by afnid
                        (newslog (the ip) (the me) 'more label)
-                       (longpage (the me) (msec) nil label title url
+                       (longpage (msec) nil label title url
                          (apply f items label title url args))))))
           rel 'nofollow)
     (pr "More")))
 
-(def display-story (i s user whence)
+(def display-story (i s whence (t user me))
   (when (or (cansee s) (s 'kids))
     (tr (display-item-number i)
-        (td (votelinks s user whence))
-        (titleline s s!url user whence))
-    (tr (tag (td colspan (if i 2 1)))    
+        (td (votelinks s whence))
+        (titleline s s!url whence))
+    (tr (tag (td colspan (if i 2 1)))
         (tag (td class 'subtext)
           (hook 'itemline s user)
           (itemline s)
           (when (in s!type 'story 'poll) (commentlink s))
           (editlink s)
           (when (apoll s) (addoptlink s))
-          (unless i (flaglink s user whence))
-          (killlink s user whence)
-          (blastlink s user whence)
-          (blastlink s user whence t)
+          (unless i (flaglink s whence))
+          (killlink s whence)
+          (blastlink s whence)
+          (blastlink s whence t)
           (deletelink s whence)))))
 
 (def display-item-number (i)
@@ -986,11 +984,11 @@ function vote(node) {
 
 (= follow-threshold* 5)
 
-(def titleline (s url user whence)
+(def titleline (s url whence (t user me))
   (tag (td class 'title)
     (if (cansee s)
         (do (deadmark s)
-            (titlelink s url user)
+            (titlelink s url)
             (pdflink url)
             (awhen (sitename url)
               (spanclass comhead
@@ -1012,10 +1010,10 @@ function vote(node) {
                 (pr ") "))))
         (pr (pseudo-text s)))))
 
-(def titlelink (s url user)
+(def titlelink (s url (t user me))
   (let toself (blank url)
-    (tag (a href (if toself 
-                      (item-url s!id) 
+    (tag (a href (if toself
+                      (item-url s!id)
                      (or (live s) (author s) (editor user))
                       url
                       nil)
@@ -1046,18 +1044,18 @@ function vote(node) {
 
 (= votewid* 14)
       
-(def votelinks (i user whence (o downtoo))
+(def votelinks (i whence (o downtoo) (t user me))
   (center
     (if (and (cansee i)
              (or (no user)
                  (no ((votes user) i!id))))
-         (do (votelink i user whence 'up)
-             (if (and downtoo 
+         (do (votelink i whence 'up)
+             (if (and downtoo
                       (or (admin user)
                           (< (item-age i) downvote-time*))
                       (canvote i 'down))
                  (do (br)
-                     (votelink i user whence 'down))
+                     (votelink i whence 'down))
                  ; don't understand why needed, but is, or a new
                  ; page is generated on voting
                  (tag (span id (+ "down_" i!id)))))
@@ -1072,7 +1070,7 @@ function vote(node) {
 
 ; redefined later (identically) so the outs catch new vals of up-url, etc.
 
-(def votelink (i user whence dir)
+(def votelink (i whence dir (t user me))
   (tag (a id      (if user (string dir '_ i!id))
           onclick (if user "return vote(this)")
           href    (vote-url user i dir whence))
@@ -1219,7 +1217,7 @@ function vote(node) {
 ; Un-flagging something doesn't unkill it, if it's now no longer
 ; over flag-kill-threshold.  Ok, since arbitrary threshold anyway.
 
-(def flaglink (i user whence)
+(def flaglink (i whence (t user me))
   (when (and user
              (isnt user i!by)
              (or (admin user) (> (karma user) flag-threshold*)))
@@ -1239,7 +1237,7 @@ function vote(node) {
                    whence)
         (pr (if (mem 'nokill i!keys) "un-notice" "noted"))))))
 
-(def killlink (i user whence)
+(def killlink (i whence (t user me))
   (when (admin user)
     (pr bar*)
     (w/rlink (do (zap no i!dead)
@@ -1255,7 +1253,7 @@ function vote(node) {
 ; site, so that all future submitters will be ignored.  Does not ban 
 ; the ip address, but that will eventually get banned by maybe-ban-ip.
 
-(def blastlink (i user whence (o nuke))
+(def blastlink (i whence (o nuke) (t user me))
   (when (and (admin user) 
              (or (no nuke) (~empty i!url)))
     (pr bar*)
@@ -1298,7 +1296,7 @@ function vote(node) {
   (minipage "Confirm"
     (tab
       ; link never used so not testable but think correct
-      (display-item nil i (the me) (flink [del-confirm-page i whence]))
+      (display-item nil i (flink [del-confirm-page i whence]))
       (spacerow 20)
       (tr (td)
           (td (urform (do (when (candelete i)
@@ -1746,15 +1744,15 @@ function vote(node) {
       (++ p!parts (list o!id))
       (save-item p))))
 
-(def display-pollopts (p user whence)
+(def display-pollopts (p whence)
   (each o (visible (map item p!parts))
-    (display-pollopt nil o user whence)
+    (display-pollopt nil o whence)
     (spacerow 7)))
 
-(def display-pollopt (n o user whence)
+(def display-pollopt (n o whence)
   (tr (display-item-number n)
       (tag (td valign 'top)
-        (votelinks o user whence))
+        (votelinks o whence))
       (tag (td class 'comment)
         (tag (div style "margin-top:1px;margin-bottom:0px")
           (if (~cansee o) (pr (pseudo-text o))
@@ -1769,7 +1767,7 @@ function vote(node) {
         (spanclass comhead
           (itemscore o)
           (editlink o)
-          (killlink o user whence)
+          (killlink o whence)
           (deletelink o whence)
           (deadmark o)))))
 
@@ -1781,9 +1779,9 @@ function vote(node) {
 (newsop item (id)
   (let s (safe-item id)
     (if (news-type s)
-        (do (if s!deleted (note-baditem user ip))
-            (item-page user s))
-        (do (note-baditem user ip)
+        (do (if s!deleted (note-baditem))
+            (item-page s))
+        (do (note-baditem)
             (pr "No such item.")))))
 
 (= baditemreqs* (table) baditem-threshold* 1/100)
@@ -1791,34 +1789,34 @@ function vote(node) {
 ; Something looking at a lot of deleted items is probably the bad sort
 ; of crawler.  Throttle it for this server invocation.
 
-(def note-baditem (user ip)
-  (unless (admin user)
-    (++ (baditemreqs* ip 0))
-    (with (r (requests/ip* ip) b (baditemreqs* ip))
+(def note-baditem ()
+  (unless (admin)
+    (++ (baditemreqs* (the ip) 0))
+    (with (r (requests/ip* (the ip)) b (baditemreqs* (the ip)))
        (when (and (> r 500) (> (/ b r) baditem-threshold*))
-         (set (throttle-ips* ip))))))
+         (set (throttle-ips* (the ip)))))))
 
 ; redefined later
 
 (def news-type (i) (and i (in i!type 'story 'comment 'poll 'pollopt)))
 
-(def item-page (user i)
+(def item-page (i)
   (with (title (and (cansee i)
                     (or i!title (aand i!text (ellipsize (striptags it)))))
          here (item-url i!id))
-    (longpage user (msec) nil nil title here
-      (tab (display-item nil i user here)
+    (longpage (msec) nil nil title here
+      (tab (display-item nil i here)
            (display-item-text i)
            (when (apoll i)
              (spacerow 10)
              (tr (td)
-                 (td (tab (display-pollopts i user here)))))
+                 (td (tab (display-pollopts i here)))))
            (when (and (cansee i) (comments-active i))
              (spacerow 10)
-             (row "" (comment-form i user here))))
-      (br2) 
+             (row "" (comment-form i here))))
+      (br2)
       (when (and i!kids (commentable i))
-        (tab (display-subcomments i user here))
+        (tab (display-subcomments i here))
         (br2)))))
 
 (def commentable (i) (in i!type 'story 'comment 'poll))
@@ -1837,19 +1835,19 @@ function vote(node) {
 
 (= displayfn* (table))
 
-(= (displayfn* 'story)   (fn (n i user here inlist)
-                           (display-story n i user here)))
+(= (displayfn* 'story)   (fn (n i here inlist)
+                           (display-story n i here)))
 
-(= (displayfn* 'comment) (fn (n i user here inlist)
-                           (display-comment n i user here nil 0 nil inlist)))
+(= (displayfn* 'comment) (fn (n i here inlist)
+                           (display-comment n i here nil 0 nil inlist)))
 
 (= (displayfn* 'poll)    (displayfn* 'story))
 
-(= (displayfn* 'pollopt) (fn (n i user here inlist)
-                           (display-pollopt n i user here)))
+(= (displayfn* 'pollopt) (fn (n i here inlist)
+                           (display-pollopt n i here)))
 
-(def display-item (n i user here (o inlist))
-  ((displayfn* (i 'type)) n i user here inlist))
+(def display-item (n i here (o inlist))
+  ((displayfn* (i 'type)) n i here inlist))
 
 (def superparent (i)
   (aif i!parent (superparent:item it) i))
@@ -1869,11 +1867,11 @@ function vote(node) {
 
 (newsop edit (id)
   (let i (safe-item id)
-    (if (and i 
+    (if (and i
              (cansee i)
              (editable-type i)
-             (or (news-type i) (admin user) (author i)))
-        (edit-page user i)
+             (or (news-type i) (admin) (author i)))
+        (edit-page i)
         (pr "No such item."))))
 
 (def editable-type (i) (fieldfn* i!type))
@@ -1881,29 +1879,29 @@ function vote(node) {
 (= fieldfn* (table))
 
 (= (fieldfn* 'story)
-   (fn (user s)
-     (with (a (admin user)  e (editor user)  x (canedit s))
+   (fn (s)
+     (with (a (admin)  e (editor)  x (canedit s))
        `((string1 title     ,s!title        t ,x)
          (url     url       ,s!url          t ,e)
          (mdtext2 text      ,s!text         t ,x)
          ,@(standard-item-fields s a e x)))))
 
 (= (fieldfn* 'comment)
-   (fn (user c)
-     (with (a (admin user)  e (editor user)  x (canedit c))
+   (fn (c)
+     (with (a (admin)  e (editor)  x (canedit c))
        `((mdtext  text      ,c!text         t ,x)
          ,@(standard-item-fields c a e x)))))
 
 (= (fieldfn* 'poll)
-   (fn (user p)
-     (with (a (admin user)  e (editor user)  x (canedit p))
+   (fn (p)
+     (with (a (admin)  e (editor)  x (canedit p))
        `((string1 title     ,p!title        t ,x)
          (mdtext2 text      ,p!text         t ,x)
          ,@(standard-item-fields p a e x)))))
 
 (= (fieldfn* 'pollopt)
-   (fn (user p)
-     (with (a (admin user)  e (editor user)  x (canedit p))
+   (fn (p)
+     (with (a (admin)  e (editor)  x (canedit p))
        `((string  title     ,p!title        t ,x)
          (url     url       ,p!url          t ,x)
          (mdtext2 text      ,p!text         t ,x)
@@ -1923,28 +1921,28 @@ function vote(node) {
 ; does everything that has to happen after submitting a story,
 ; and call it both there and here.
 
-(def edit-page (user i)
+(def edit-page (i)
   (let here (edit-url i)
-    (shortpage user nil nil "Edit" here
-      (tab (display-item nil i user here)
+    (shortpage nil nil "Edit" here
+      (tab (display-item nil i here)
            (display-item-text i))
       (br2)
-      (vars-form ((fieldfn* i!type) user i)
+      (vars-form ((fieldfn* i!type) i)
                  (fn (name val)
-                   (unless (ignore-edit user i name val)
+                   (unless (ignore-edit i name val)
                      (when (and (is name 'dead) val (no i!dead))
-                       (log-kill i user))
+                       (log-kill i (the me)))
                      (= (i name) val)))
-                 (fn () (if (admin user) (pushnew 'locked i!keys))
+                 (fn () (if (admin) (pushnew 'locked i!keys))
                         (save-item i)
                         (metastory&adjust-rank i)
                         (wipe (comment-cache* i!id))
-                        (edit-page user i)))
-      (hook 'edit user i))))
+                        (edit-page i)))
+      (hook 'edit (the me) i))))
 
-(def ignore-edit (user i name val)
+(def ignore-edit (i name val)
   (case name title (len> val title-limit*)
-             dead  (and (mem 'nokill i!keys) (~admin user))))
+             dead  (and (mem 'nokill i!keys) (~admin))))
 
  
 ; Comment Submission
@@ -1954,25 +1952,25 @@ function vote(node) {
               (fn (u ip)
                 (ensure-news-user u)
                 (newslog ip u 'comment-login)
-                (addcomment-page parent u whence text))))
+                (addcomment-page parent whence text))))
 
-(def addcomment-page (parent user whence (o text) (o msg))
+(def addcomment-page (parent whence (o text) (o msg))
   (minipage "Add Comment"
     (pagemessage msg)
     (tab
-      (let here (flink [addcomment-page parent (the me) whence text msg])
-        (display-item nil parent user here))
+      (let here (flink [addcomment-page parent whence text msg])
+        (display-item nil parent here))
       (spacerow 10)
-      (row "" (comment-form parent user whence text)))))
+      (row "" (comment-form parent whence text)))))
 
 (= noob-comment-msg* nil)
 
 ; Comment forms last for 30 min (- cache time)
 
-(def comment-form (parent user whence (o text))
+(def comment-form (parent whence (o text) (t user me))
   (tarform 1800
            (when-umatch/r user
-             (process-comment user parent arg!text (the ip) whence))
+             (process-comment parent arg!text (the ip) whence))
     (textarea "text" 6 60
       (aif text (prn (unmarkdown it))))
     (when (and noob-comment-msg* (noob user))
@@ -1987,11 +1985,11 @@ function vote(node) {
 ; instead of just "a\nb".   Maybe should just remove returns from
 ; the vals coming in from any form, e.g. in aform.
 
-(def process-comment (user parent text ip whence)
+(def process-comment (parent text ip whence (t user me))
   (if (no user)
        (flink [comment-login-warning parent whence text])
       (empty text)
-       (flink [addcomment-page parent (the me) whence text retry*])
+       (flink [addcomment-page parent whence text retry*])
       (oversubmitting user ip 'comment)
        (flink [msgpage toofast*])
        (atlet c (create-comment parent (md-from-form text) user ip)
@@ -2017,24 +2015,24 @@ function vote(node) {
 
 ; Comment Display
 
-(def display-comment-tree (c user whence (o indent 0) (o initialpar))
+(def display-comment-tree (c whence (o indent 0) (o initialpar))
   (when (cansee-descendant c)
-    (display-1comment c user whence indent initialpar)
-    (display-subcomments c user whence (+ indent 1))))
+    (display-1comment c whence indent initialpar)
+    (display-subcomments c whence (+ indent 1))))
 
-(def display-1comment (c user whence indent showpar)
-  (row (tab (display-comment nil c user whence t indent showpar showpar))))
+(def display-1comment (c whence indent showpar)
+  (row (tab (display-comment nil c whence t indent showpar showpar))))
 
-(def display-subcomments (c user whence (o indent 0))
+(def display-subcomments (c whence (o indent 0))
   (each k (sort (compare > frontpage-rank:item) c!kids)
-    (display-comment-tree (item k) user whence indent)))
+    (display-comment-tree (item k) whence indent)))
 
-(def display-comment (n c user whence (o astree) (o indent 0) 
-                                      (o showpar) (o showon))
+(def display-comment (n c whence (o astree) (o indent 0)
+                                 (o showpar) (o showon))
   (tr (display-item-number n)
       (when astree (td (hspace (* indent 40))))
-      (tag (td valign 'top) (votelinks c user whence t))
-      (display-comment-body c user whence astree indent showpar showon)))
+      (tag (td valign 'top) (votelinks c whence t))
+      (display-comment-body c whence astree indent showpar showon)))
 
 ; Comment caching doesn't make generation of comments significantly
 ; faster, but may speed up everything else by generating less garbage.
@@ -2053,18 +2051,18 @@ function vote(node) {
 ; so if server is running a long time could have more than that in
 ; cache.  Probably should actively gc expired cache entries.
 
-(def display-comment-body (c user whence astree indent showpar showon)
+(def display-comment-body (c whence astree indent showpar showon)
   (++ comments-printed*)
   (if (and comment-caching*
            astree (no showpar) (no showon)
            (live c)
-           (nor (admin user) (editor user) (author c))
+           (nor (admin) (editor) (author c))
            (< (- maxid* c!id) cc-window*)
            (> (- (seconds) c!time) 60)) ; was 3600
-      (pr (cached-comment-body c user whence indent))
-      (gen-comment-body c user whence astree indent showpar showon)))
+      (pr (cached-comment-body c whence indent))
+      (gen-comment-body c whence astree indent showpar showon)))
 
-(def cached-comment-body (c user whence indent)
+(def cached-comment-body (c whence indent)
   (or (and (> (or (comment-cache-timeout* c!id) 0) (seconds))
            (awhen (comment-cache* c!id)
              (++ cc-hits*)
@@ -2072,7 +2070,7 @@ function vote(node) {
       (= (comment-cache-timeout* c!id)
           (cc-timeout c!time)
          (comment-cache* c!id)
-          (tostring (gen-comment-body c user whence t indent nil nil)))))
+          (tostring (gen-comment-body c whence t indent nil nil)))))
 
 ; Cache for the remainder of the current minute, hour, or day.
 
@@ -2084,7 +2082,7 @@ function vote(node) {
                (* (+ (trunc (/ age  3600)) 1)  3600)
                (* (+ (trunc (/ age 86400)) 1) 86400)))))
 
-(def gen-comment-body (c user whence astree indent showpar showon)
+(def gen-comment-body (c whence astree indent showpar showon)
   (tag (td class 'default)
     (let parent (and (or (no astree) showpar) (c 'parent))
       (tag (div style "margin-top:2px; margin-bottom:-10px; ")
@@ -2095,12 +2093,12 @@ function vote(node) {
             (when (cansee c) (pr bar*))
             (link "parent" (item-url ((item parent) 'id))))
           (editlink c)
-          (killlink c user whence)
-          (blastlink c user whence)
+          (killlink c whence)
+          (blastlink c whence)
           (deletelink c whence)
           ; a hack to check whence but otherwise need an arg just for this
           (unless (or astree (is whence "newcomments"))
-            (flaglink c user whence))
+            (flaglink c whence))
           (deadmark c)
           (when showon
             (pr " | on: ")
@@ -2142,12 +2140,12 @@ function vote(node) {
          whence (or (only.urldecode whence) "news"))
     (if (only.comments-active i)
         (if user
-            (addcomment-page i user whence)
+            (addcomment-page i whence)
             (login-page 'both "You have to be logged in to comment."
                         (fn (u ip)
                           (ensure-news-user u)
                           (newslog ip u 'comment-login)
-                          (addcomment-page i u whence))))
+                          (addcomment-page i whence))))
         (pr "No such item."))))
 
 (def comment-color (c)
@@ -2171,7 +2169,7 @@ function vote(node) {
       (withs (title (+ user "'s comments")
               label (if (is (the me) user) "threads" title)
               here  (threads-url user))
-        (longpage (the me) (msec) nil label title here
+        (longpage (msec) nil label title here
           (awhen (keep [and (cansee _) (~subcomment _)]
                        (comments user maxend*))
             (display-threads it label title here))))
@@ -2181,7 +2179,7 @@ function vote(node) {
                       (o start 0) (o end threads-perpage*))
   (tab
     (each c (cut comments start end)
-      (display-comment-tree c (the me) whence 0 t))
+      (display-comment-tree c whence 0 t))
     (when end
       (let newend (+ end threads-perpage*)
         (when (and (<= newend maxend*) (< end (len comments)))
@@ -2220,7 +2218,7 @@ function vote(node) {
     (if (profile user)
         (with (label (+ user "'s submissions")
                here  (submitted-url user))
-          (longpage me (msec) nil label label here
+          (longpage (msec) nil label label here
             (if (or (no (ignored user))
                     (is me user)
                     (seesdead me))
@@ -2260,7 +2258,7 @@ function vote(node) {
 (= nleaders* 20)
 
 (newscache leaderspage user 1000
-  (longpage user (msec) nil "leaders" "Leaders" "leaders"
+  (longpage (msec) nil "leaders" "Leaders" "leaders"
     (sptab
       (let i 0
         (each u (firstn nleaders* (leading-users))
@@ -2355,7 +2353,7 @@ first asterisk isn't whitespace.
 
 ; Noprocrast
 
-(def check-procrast (user)
+(def check-procrast ((t user me))
   (or (no user)
       (no (uvar user noprocrast))
       (let now (seconds)
@@ -2375,7 +2373,7 @@ first asterisk isn't whitespace.
   (= (uvar user lastview) (= (uvar user firstview) (seconds)))
   (save-prof user))
 
-(def procrast-msg (user whence)
+(def procrast-msg (whence (t user me))
   (let m (+ 1 (trunc (- (uvar user minaway)
                         (minutes-since (uvar user lastview)))))
     (pr "<b>Get back to work!</b>")
@@ -2557,7 +2555,7 @@ first asterisk isn't whitespace.
 
 
 (edop flagged ()
-  (display-selected-items user [retrieve maxend* flagged _] "flagged"))
+  (display-selected-items [retrieve maxend* flagged _] "flagged"))
 
 (def flagged (i) 
   (and (live i)
@@ -2566,9 +2564,9 @@ first asterisk isn't whitespace.
 
 
 (edop killed ()
-  (display-selected-items user [retrieve maxend* !dead _] "killed"))
+  (display-selected-items [retrieve maxend* !dead _] "killed"))
 
-(def display-selected-items (user f whence)
+(def display-selected-items (f whence)
   (display-items (f stories*) nil nil whence)
   (vspace 35)
   (color-stripe textgray)
