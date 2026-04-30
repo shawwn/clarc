@@ -36,17 +36,17 @@
 (defop viewpost req (blogop post-page req))
 
 (def blogop (f req)
-  (aif (post (arg req "id")) 
-       (f (get-user req) it) 
+  (aif (post (arg req "id"))
+       (f it)
        (blogpage (pr "No such post."))))
 
 (def permalink (p) (string "viewpost?id=" p!id))
 
-(def post-page (user p) (blogpage (display-post user p)))
+(def post-page (p) (blogpage (display-post p)))
 
-(def display-post (user p)
+(def display-post (p (t me))
   (tag b (link p!title (permalink p)))
-  (when user
+  (when me
     (sp)
     (link "[edit]" (string "editpost?id=" p!id)))
   (br2)
@@ -54,26 +54,25 @@
 
 (defopl newpost req
   (whitepage
-    (aform [let u (get-user _)
-             (post-page u (addpost u (arg _ "t") (arg _ "b")))]
+    (aform [post-page (addpost (arg _ "t") (arg _ "b"))]
       (tab (row "title" (input "t" "" 60))
            (row "text"  (textarea "b" 10 80))
            (row ""      (submit))))))
 
-(def addpost (user title text)
+(def addpost (title text)
   (let p (inst 'post 'id (++ maxid*) 'title title 'text text)
     (save-post p)
     (= (posts* p!id) p)))
 
 (defopl editpost req (blogop edit-page req))
 
-(def edit-page (user p)
+(def edit-page (p)
   (whitepage
-    (vars-form user
+    (vars-form (the me)
                `((string title ,p!title t t) (text text ,p!text t t))
                (fn (name val) (= (p name) val))
                (fn () (save-post p)
-                      (post-page user p)))))
+                      (post-page p)))))
 
 (defop archive req
   (blogpage
@@ -82,12 +81,11 @@
         (tag li (link p!title (permalink p)))))))
 
 (defop blog req
-  (let user (get-user req)
-    (blogpage
-      (for i 0 4
-        (awhen (posts* (- maxid* i)) 
-          (display-post user it)
-          (br 3))))))
+  (blogpage
+    (for i 0 4
+      (awhen (posts* (- maxid* i))
+        (display-post it)
+        (br 3)))))
 
 (def bsv ()
   (ensure-dir postdir*)

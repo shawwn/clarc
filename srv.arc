@@ -210,14 +210,22 @@ Connection: close"))
   (w/stdout str
     (iflet f (srvops* op)
            (let req (inst 'request 'args args 'cooks cooks 'ip ip)
-             (if (redirector* op)
-                 (do (prn rdheader*)
-                     (prn "Location: " (f str req))
-                     (prn))
-                 (do (prn header*)
-                     (awhen (max-age* op)
-                       (prn "Cache-Control: max-age=" it))
-                     (f str req))))
+             ;; Bind per-request thread-locals once, here, so every
+             ;; helper down the call stack can reach them via (the me)
+             ;; / (the ip) / (the req) without explicit threading.
+             ;; Each request runs on its own thread (see handle-
+             ;; request-thread) so these are naturally isolated.
+             (w/the req req
+               (w/the ip ip
+                 (w/the me (errsafe (get-user req))
+                   (if (redirector* op)
+                       (do (prn rdheader*)
+                           (prn "Location: " (f str req))
+                           (prn))
+                       (do (prn header*)
+                           (awhen (max-age* op)
+                             (prn "Cache-Control: max-age=" it))
+                           (f str req)))))))
            (let filetype (static-filetype op)
              (aif (and filetype (file-exists (string staticdir* op)))
                   (do (prn (type-header* filetype))
@@ -516,10 +524,10 @@ Connection: close"))
 (defop || req (pr "It's alive."))
 
 (defop topips req
-  (when (admin (get-user req))
+  (when (admin (the me))
     (whitepage
       (sptab
-        (each ip (let leaders nil 
+        (each ip (let leaders nil
                    (maptable (fn (ip n)
                                (when (> n 100)
                                  (insort (compare > requests/ip*)
@@ -531,7 +539,7 @@ Connection: close"))
             (row ip n (pr (num (* 100 (/ n requests*)) 1)))))))))
 
 (defop spurned req
-  (when (admin (get-user req))
+  (when (admin (the me))
     (whitepage
       (sptab
         (map (fn ((ip n)) (row ip n))

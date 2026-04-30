@@ -32,16 +32,18 @@
     (when u (= (logins* u) req!ip))
     u))
 
+; The req parameter is vestigial: thread-local (the me) replaces
+; (get-user req). Kept for backward compatibility with callers.
 (mac when-umatch (user req . body)
-  `(if (is ,user (get-user ,req))
+  `(if (is ,user (the me))
        (do ,@body)
        (mismatch-message)))
 
-(def mismatch-message () 
+(def mismatch-message ()
   (prn "Dead link: users don't match."))
 
 (mac when-umatch/r (user req . body)
-  `(if (is ,user (get-user ,req))
+  `(if (is ,user (the me))
        (do ,@body)
        "mismatch"))
 
@@ -69,13 +71,13 @@
        (when-umatch ,user ,req ,@body))))
 
 
-(defop admin req (admin-gate (get-user req)))
+(defop admin req (admin-gate))
 
-(def admin-gate (u)
-  (if (admin u)
-      (admin-page u)
+(def admin-gate ((t me))
+  (if (admin me)
+      (admin-page me)
       (login-page 'login nil
-                  (fn (u ip)  (admin-gate u)))))
+                  (fn (u ip) (admin-gate u)))))
 
 (def admin (u) (and u (mem u admins*)))
 
@@ -165,18 +167,18 @@
           (acons afterward)))
 
 (def login-handler (req switch afterward)
-  (logout-user (get-user req))
-  (aif (good-login (arg req "u") (arg req "p") req!ip)
-       (login it req!ip (user->cookie* it) afterward)
+  (logout-user (the me))
+  (aif (good-login (arg req "u") (arg req "p") (the ip))
+       (login it (the ip) (user->cookie* it) afterward)
        (failed-login switch "Bad login." afterward)))
 
 (def create-handler (req switch afterward)
-  (logout-user (get-user req))
+  (logout-user (the me))
   (with (user (arg req "u") pw (arg req "p"))
     (aif (bad-newacct user pw)
          (failed-login switch it afterward)
          (do (create-acct user pw)
-             (login user req!ip (cook-user user) afterward)))))
+             (login user (the ip) (cook-user user) afterward)))))
 
 (def login (user ip cookie afterward)
   (= (logins* user) ip)
@@ -253,14 +255,14 @@
        str))
 
 (defop logout req
-  (aif (get-user req)
+  (aif (the me)
        (do (logout-user it)
            (pr "Logged out."))
        (pr "You were not logged in.")))
 
 (defop whoami req
-  (aif (get-user req)
-       (prs it 'at req!ip)
+  (aif (the me)
+       (prs it 'at (the ip))
        (do (pr "You are not logged in. ")
            (w/link (login-page 'both) (pr "Log in"))
            (pr "."))))
@@ -661,8 +663,8 @@
 
 (mac defopl (name parm . body)
   `(defop ,name ,parm
-     (if (get-user ,parm)
-         (do ,@body) 
+     (if (the me)
+         (do ,@body)
          (login-page 'both
                      "You need to be logged in to do that."
                      (list (fn (u ip))
