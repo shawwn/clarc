@@ -1700,7 +1700,7 @@ function vote(node) {
        (flink [newpoll-page title text opts fewopts*])
       (atlet p (create-poll (multisubst scrubrules* title) text opts)
         (ip-ban-test p)
-        (when (ignored (me)) (kill p 'ignored))
+        (when (ignored) (kill p 'ignored))
         (submit-item p)
         (maybe-ban-ip p)
         "newest")))
@@ -2214,7 +2214,7 @@ function vote(node) {
       (with (label (+ user "'s submissions")
              here  (submitted-url user))
         (longpage (msec) nil label label here
-          (if (or (no (ignored user))
+          (if (or (~ignored user)
                   (me user)
                   (seesdead))
               (aif (keep [metastory&cansee _]
