@@ -1343,7 +1343,7 @@ function vote(node) {
 ; Actual votes can't be lost because that field is not editable.  Not a
 ; big enough problem to drag in locking.
 
-(def vote-for (i (o dir 'up) (t user me))
+(def vote-for (i (o dir 'up))
   (unless (or ((votes) i!id) 
               (and (~live i) (~me i!by)))
     (withs (ip   (logins* (me))
