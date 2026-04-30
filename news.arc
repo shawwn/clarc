@@ -258,7 +258,7 @@
 
 (= kill-log* nil)
 
-(def log-kill (i how)
+(def log-kill (i (o how (the me)))
   (push (list i!id how) kill-log*))
 
 (mac each-loaded-item (var . body)
@@ -729,7 +729,7 @@ function vote(node) {
                  (admin&newsadmin-page)))
       (single-input "" 'id 20 "kill all by"))
     (br2)
-    (aform (do (set-ip-ban (the me) arg!ip t)
+    (aform (do (set-ip-ban arg!ip t)
                (admin&newsadmin-page))
       (single-input "" 'ip 20 "ban ip"))))
 
@@ -995,8 +995,7 @@ function vote(node) {
               (spanclass comhead
                 (pr " (" )
                 (if (admin user)
-                    (w/rlink (do (set-site-ban user
-                                               it
+                    (w/rlink (do (set-site-ban it
                                                (case (car (banned-sites* it))
                                                  nil    'ignore
                                                  ignore 'kill
@@ -1120,11 +1119,11 @@ function vote(node) {
                              (ensure-news-user)
                              (newslog 'vote-login)
                              (when (canvote i dir)
-                               (vote-for (the me) i dir)
+                               (vote-for i dir)
                                (logvote i)))
                            whence))
         (canvote i dir)
-         (do (vote-for by i dir)
+         (do (vote-for i dir)
              (logvote i))
          (pr "Can't make that vote."))))
 
@@ -1242,9 +1241,9 @@ function vote(node) {
   (when (admin user)
     (pr bar*)
     (w/rlink (do (zap no i!dead)
-                 (if i!dead 
+                 (if i!dead
                      (do (pull 'nokill i!keys)
-                         (log-kill i user))
+                         (log-kill i))
                      (pushnew 'nokill i!keys))
                  (save-item i)
                  whence)
@@ -1258,21 +1257,21 @@ function vote(node) {
   (when (and (admin user) 
              (or (no nuke) (~empty i!url)))
     (pr bar*)
-    (w/rlink (do (toggle-blast i user nuke)
+    (w/rlink (do (toggle-blast i nuke)
                  whence)
       (prt (if (ignored i!by) "un-") (if nuke "nuke" "blast")))))
 
-(def toggle-blast (i user (o nuke))
+(def toggle-blast (i (o nuke))
   (atomic
     (if (ignored i!by)
         (do (wipe i!dead (ignored i!by))
             (awhen (and nuke (sitename i!url))
-              (set-site-ban user it nil)))
+              (set-site-ban it nil)))
         (do (set i!dead)
             (ignore i!by (if nuke 'nuke 'blast))
             (awhen (and nuke (sitename i!url))
-              (set-site-ban user it 'ignore))))
-    (if i!dead (log-kill i user))
+              (set-site-ban it 'ignore))))
+    (if i!dead (log-kill i))
     (save-item i)
     (save-prof i!by)))
 
@@ -1349,7 +1348,7 @@ function vote(node) {
 ; Actual votes can't be lost because that field is not editable.  Not a
 ; big enough problem to drag in locking.
 
-(def vote-for (user i (o dir 'up))
+(def vote-for (i (o dir 'up) (t user me))
   (unless (or ((votes user) i!id) 
               (and (~live i) (isnt user i!by)))
     (withs (ip   (logins* user)
@@ -1436,8 +1435,7 @@ function vote(node) {
     (urform (process-story (clean-url arg!u)
                            (striptags arg!t)
                            showtext
-                           (and showtext (md-from-form arg!x t))
-                           (the ip))
+                           (and showtext (md-from-form arg!x t)))
       (tab
         (row "title"  (input "t" title 50))
         (if prefer-url*
@@ -1480,9 +1478,9 @@ function vote(node) {
 
 (disktable big-spamsites* (+ newsdir* "big-spamsites"))
 
-(def process-story (url title showtext text ip)
+(def process-story (url title showtext text)
   (aif (and (~blank url) (live-story-w/url url))
-       (do (vote-for (the me) it)
+       (do (vote-for it)
            (item-url it!id))
        (if (no (the me))
             (flink [submit-login-warning url title showtext text])
@@ -1496,19 +1494,19 @@ function vote(node) {
            (let site (sitename url)
              (or (big-spamsites* site) (recent-spam site)))
             (flink [msgpage spammage*])
-           (oversubmitting (the me) ip 'story url)
+           (oversubmitting 'story url)
             (flink [msgpage toofast*])
-           (let s (create-story url (process-title title) text (the me) ip)
-             (story-ban-test (the me) s ip url)
+           (let s (create-story url (process-title title) text)
+             (story-ban-test s url)
              (when (ignored (the me)) (kill s 'ignored))
-             (submit-item (the me) s)
+             (submit-item s)
              (maybe-ban-ip s)
              "newest"))))
 
-(def submit-item (user i)
+(def submit-item (i (t user me))
   (push i!id (uvar user submitted))
   (save-prof user)
-  (vote-for user i))
+  (vote-for i))
 
 (def recent-spam (site)
   (and (caris (banned-sites* site) 'ignore)
@@ -1525,13 +1523,13 @@ function vote(node) {
 ; New user can't submit more than 2 stories in a 2 hour period.
 ; Give overeager users the key toofast to make limit permanent.
 
-(def oversubmitting (user ip kind (o url))
+(def oversubmitting (kind (o url) (t user me))
   (and enforce-oversubmit*
        (or (check-key user 'toofast)
            (ignored user)
            (< (user-age user) new-age-threshold*)
            (< (karma user) new-karma-threshold*))
-       (len> (recent-items [or (author _) (is _!ip ip)] 180)
+       (len> (recent-items [or (author _) (is _!ip (the ip))] 180)
              (if (is kind 'story)
                  (if (bad-user user) 0 1)
                  (if (bad-user user) 1 10)))))
@@ -1572,10 +1570,11 @@ function vote(node) {
                    ; "sampasite"  "multiply" "wetpaint" ; all spam, just ban
                    "eurekster" "blogsome" "edogo" "blog" "com"))
 
-(def create-story (url title text user ip)
+(def create-story (url title text)
   (newslog 'create url (list title))
-  (let s (inst 'item 'type 'story 'id (new-item-id) 
-                     'url url 'title title 'text text 'by user 'ip ip)
+  (let s (inst 'item 'type 'story 'id (new-item-id)
+                     'url url 'title title 'text text
+                     'by (the me) 'ip (the ip))
     (save-item s)
     (= (items* s!id) s)
     (unless (blank url) (register-url s url))
@@ -1611,12 +1610,12 @@ function vote(node) {
 
 (= comment-kill* nil ip-ban-threshold* 3)
 
-(def set-ip-ban (user ip yesno (o info))
-  (= (banned-ips* ip) (and yesno (list user (seconds) info)))
+(def set-ip-ban (ip yesno (o info) (t actor me))
+  (= (banned-ips* ip) (and yesno (list actor (seconds) info)))
   (todisk banned-ips*))
 
-(def set-site-ban (user site ban (o info))
-  (= (banned-sites* site) (and ban (list ban user (seconds) info)))
+(def set-site-ban (site ban (o info) (t actor me))
+  (= (banned-sites* site) (and ban (list ban actor (seconds) info)))
   (todisk banned-sites*))
 
 ; Kill submissions from banned ips, but don't auto-ignore users from
@@ -1625,23 +1624,23 @@ function vote(node) {
 ; Note that ban tests are only applied when a link or comment is
 ; submitted, not each time it's edited.  This will do for now.
 
-(def story-ban-test (user i ip url)
-  (site-ban-test user i url)
-  (ip-ban-test i ip)
+(def story-ban-test (i url)
+  (site-ban-test i url)
+  (ip-ban-test i)
   (hook 'story-ban-test i url))
 
-(def site-ban-test (user i url)
+(def site-ban-test (i url (t user me))
   (whenlet ban (banned-sites* (sitename url))
     (if (caris ban 'ignore) (ignore user 'site-ban nil))
     (kill i 'site-ban)))
 
-(def ip-ban-test (i ip)
+(def ip-ban-test (i (o ip (the ip)))
   (if (banned-ips* ip) (kill i 'banned-ip)))
 
-(def comment-ban-test (user i ip string kill-list ignore-list)
+(def comment-ban-test (i string kill-list ignore-list (t user me))
   (when (some [posmatch _ string] ignore-list)
     (ignore user 'comment-ban nil))
-  (when (or (banned-ips* ip) (some [posmatch _ string] kill-list))
+  (when (or (banned-ips* (the ip)) (some [posmatch _ string] kill-list))
     (kill i 'comment-ban)))
 
 ; An IP is banned when multiple ignored users have submitted over
@@ -1656,7 +1655,7 @@ function vote(node) {
     (let bads (loaded-items [and _!dead (astory _) (is _!ip s!ip)])
       (when (and (len> bads ip-ban-threshold*)
                  (some [and (ignored _!by) (isnt _!by s!by)] bads))
-        (set-ip-ban nil s!ip t)))))
+        (set-ip-ban s!ip t nil nil)))))
 
 (def killallby (user) 
   (map [kill _ 'all] (submissions user)))
@@ -1687,8 +1686,7 @@ function vote(node) {
     (pagemessage msg)
     (urform (process-poll (striptags arg!t)
                           (md-from-form arg!x t)
-                          (striptags arg!o)
-                          (the ip))
+                          (striptags arg!o))
       (tab
         (row "title"   (input "t" title 50))
         (row "text"    (textarea "x" 4 50 (only.pr text)))
@@ -1698,50 +1696,51 @@ function vote(node) {
 
 (= fewopts* "A poll must have at least two options.")
 
-(def process-poll (title text opts ip)
+(def process-poll (title text opts)
   (if (or (blank title) (blank opts))
        (flink [newpoll-page title text opts retry*])
       (len> title title-limit*)
        (flink [newpoll-page title text opts toolong*])
       (len< (paras opts) 2)
        (flink [newpoll-page title text opts fewopts*])
-      (atlet p (create-poll (multisubst scrubrules* title) text opts (the me) ip)
-        (ip-ban-test p ip)
+      (atlet p (create-poll (multisubst scrubrules* title) text opts)
+        (ip-ban-test p)
         (when (ignored (the me)) (kill p 'ignored))
-        (submit-item (the me) p)
+        (submit-item p)
         (maybe-ban-ip p)
         "newest")))
 
-(def create-poll (title text opts user ip)
+(def create-poll (title text opts)
   (newslog 'create-poll title)
   (let p (inst 'item 'type 'poll 'id (new-item-id)
-                     'title title 'text text 'by user 'ip ip)
-    (= p!parts (map get!id (map [create-pollopt p nil nil _ user ip]
+                     'title title 'text text
+                     'by (the me) 'ip (the ip))
+    (= p!parts (map get!id (map [create-pollopt p nil nil _]
                                 (paras opts))))
     (save-item p)
     (= (items* p!id) p)
     (push p stories*)
     p))
 
-(def create-pollopt (p url title text user ip)
+(def create-pollopt (p url title text)
   (let o (inst 'item 'type 'pollopt 'id (new-item-id)
                      'url url 'title title 'text text 'parent p!id
-                     'by user 'ip ip)
+                     'by (the me) 'ip (the ip))
     (save-item o)
-    (= (items* o!id) o) 
+    (= (items* o!id) o)
     o))
 
 (def add-pollopt-page (p)
   (minipage "Add Poll Choice"
-    (urform (do (add-pollopt p (striptags arg!x) (the ip))
+    (urform (do (add-pollopt p (striptags arg!x))
                 (item-url p!id))
       (tab
         (row "text" (textarea "x" 4 50))
         (row ""     (submit))))))
 
-(def add-pollopt (p text ip)
+(def add-pollopt (p text)
   (unless (blank text)
-    (atlet o (create-pollopt p nil nil text (the me) ip)
+    (atlet o (create-pollopt p nil nil text)
       (++ p!parts (list o!id))
       (save-item p))))
 
@@ -1932,7 +1931,7 @@ function vote(node) {
                  (fn (name val)
                    (unless (ignore-edit i name val)
                      (when (and (is name 'dead) val (no i!dead))
-                       (log-kill i (the me)))
+                       (log-kill i))
                      (= (i name) val)))
                  (fn () (if (admin) (pushnew 'locked i!keys))
                         (save-item i)
@@ -1971,7 +1970,7 @@ function vote(node) {
 (def comment-form (parent whence (o text) (t user me))
   (tarform 1800
            (when-umatch/r user
-             (process-comment parent arg!text (the ip) whence))
+             (process-comment parent arg!text whence))
     (textarea "text" 6 60
       (aif text (prn (unmarkdown it))))
     (when (and noob-comment-msg* (noob user))
@@ -1986,26 +1985,27 @@ function vote(node) {
 ; instead of just "a\nb".   Maybe should just remove returns from
 ; the vals coming in from any form, e.g. in aform.
 
-(def process-comment (parent text ip whence (t user me))
+(def process-comment (parent text whence (t user me))
   (if (no user)
        (flink [comment-login-warning parent whence text])
       (empty text)
        (flink [addcomment-page parent whence text retry*])
-      (oversubmitting user ip 'comment)
+      (oversubmitting 'comment)
        (flink [msgpage toofast*])
-       (atlet c (create-comment parent (md-from-form text) user ip)
-         (comment-ban-test user c ip text comment-kill* comment-ignore*)
+       (atlet c (create-comment parent (md-from-form text))
+         (comment-ban-test c text comment-kill* comment-ignore*)
          (if (bad-user user) (kill c 'ignored/karma))
-         (submit-item user c)
+         (submit-item c)
          whence)))
 
 (def bad-user (u)
   (or (ignored u) (< (karma u) comment-threshold*)))
 
-(def create-comment (parent text user ip)
+(def create-comment (parent text)
   (newslog 'comment (parent 'id))
   (let c (inst 'item 'type 'comment 'id (new-item-id)
-                     'text text 'parent parent!id 'by user 'ip ip)
+                     'text text 'parent parent!id
+                     'by (the me) 'ip (the ip))
     (save-item c)
     (= (items* c!id) c)
     (push c!id parent!kids)
@@ -2468,11 +2468,11 @@ first asterisk isn't whitespace.
                                      nil (+ "killed at " site) "badsites"))))
             (tdr (when deads (pr (round (days-since ((car deads) 'time))))))
             (td site)
-            (td (w/rlink (do (set-site-ban user site nil) "badsites")
+            (td (w/rlink (do (set-site-ban site nil) "badsites")
                   (fontcolor (if ban gray.220 black) (pr "x"))))
-            (td (w/rlink (do (set-site-ban user site 'kill) "badsites")
+            (td (w/rlink (do (set-site-ban site 'kill) "badsites")
                   (fontcolor (case ban kill darkred gray.220) (pr "x"))))
-            (td (w/rlink (do (set-site-ban user site 'ignore) "badsites")
+            (td (w/rlink (do (set-site-ban site 'ignore) "badsites")
                   (fontcolor (case ban ignore darkred gray.220) (pr "x"))))
             (td (each u (dedup (map !by deads))
                   (userlink u nil)
@@ -2509,7 +2509,7 @@ first asterisk isn't whitespace.
       (row "IP" "Days" "Dead" "Live" "Users")
       (each ip ips
         (tr (td (let banned (banned-ips* ip)
-                  (w/rlink (do (set-ip-ban user ip (no banned))
+                  (w/rlink (do (set-ip-ban ip (no banned))
                                "badips")
                     (fontcolor (if banned darkred) (pr ip)))))
             (tdr (when (or (goods ip) (bads ip))
