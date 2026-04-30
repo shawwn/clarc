@@ -294,7 +294,14 @@ Connection: close"))
   (map [tokens _ #\=] 
        (cdr (tokens s [or (whitec _) (is _ #\;)]))))
 
-(def arg (req key) (alref req!args key))
+; Look up a request arg by key. Reads (the req), so callers don't
+; need to thread req through. Accepts a symbol or string key:
+;   (arg "id")   ; explicit string
+;   (arg 'id)    ; symbol --- arc sugar:
+;   arg!id       ; equivalent to (arg 'id)
+(def arg (key)
+  (let req (the req)
+    (alref req!args (if (isa key 'sym) (string key) key))))
 
 ; *** Warning: does not currently urlencode args, so if need to do
 ; that replace v with (urlencode v).
@@ -365,12 +372,12 @@ Connection: close"))
  
 (defop-raw x (str req)
   (w/stdout str 
-    (aif (fns* (sym (arg req "fnid")))
+    (aif (fns* (sym arg!fnid))
          (it req)
          (pr dead-msg*))))
 
 (defopr-raw y (str req)
-  (aif (fns* (sym (arg req "fnid")))
+  (aif (fns* (sym arg!fnid))
        (w/stdout str (it req))
        "deadlink"))
 
@@ -378,11 +385,11 @@ Connection: close"))
 ; the fn not to generate it.
 
 (defop-raw a (str req)
-  (aif (fns* (sym (arg req "fnid")))
+  (aif (fns* (sym arg!fnid))
        (tostring (it req))))
 
 (defopr r req
-  (aif (fns* (sym (arg req "fnid")))
+  (aif (fns* (sym arg!fnid))
        (it req)
        "deadlink"))
 

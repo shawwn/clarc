@@ -28,7 +28,7 @@
       (br2)
       (aform (fn (req)
                (when-umatch user
-                 (aif (goodname (arg req "app"))
+                 (aif (goodname arg!app)
                       (edit-app it)
                       (prompt-page "Bad name."))))
          (tab (row "name:" (input "app") (submit "create app")))))))
@@ -59,8 +59,8 @@
     (br2)
     (aform (fn (req)
              (if (is (the me) me)
-                 (do (when (is (arg req "cmd") "save")
-                       (write-app me app (readall (arg req "exprs"))))
+                 (do (when (is arg!cmd "save")
+                       (write-app me app (readall arg!exprs)))
                      (prompt-page))
                  (login-page 'both nil
                              (fn (u ip) (w/me u (prompt-page))))))
@@ -96,7 +96,7 @@
 
 (def replpage (req)
   (whitepage
-    (repl (readall (or (arg req "expr") "")) "repl")))
+    (repl (readall (or arg!expr "")) "repl")))
 
 (def repl (exprs url)
     (each expr exprs 

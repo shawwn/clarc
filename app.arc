@@ -96,7 +96,7 @@
       (br2)
       (aform (fn (req)
                (when-umatch user
-                 (with (u (arg req "u") p (arg req "p"))
+                 (with (u arg!u p arg!p)
                    (if (or (no u) (no p) (is u "") (is p ""))
                         (pr "Bad data.")
                        (user-exists u)
@@ -169,13 +169,13 @@
 
 (def login-handler (req switch afterward)
   (logout-user (the me))
-  (aif (good-login (arg req "u") (arg req "p") (the ip))
+  (aif (good-login arg!u arg!p (the ip))
        (login it (the ip) (user->cookie* it) afterward)
        (failed-login switch "Bad login." afterward)))
 
 (def create-handler (req switch afterward)
   (logout-user (the me))
-  (with (user (arg req "u") pw (arg req "p"))
+  (with (user arg!u pw arg!p)
     (aif (bad-newacct user pw)
          (failed-login switch it afterward)
          (do (create-acct user pw)
