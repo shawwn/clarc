@@ -292,7 +292,7 @@
                                         (contro-factor s))))
 
 (def contro-factor (s)
-  (aif (check (visible-family nil s) [> _ 20])
+  (aif (check (visible-family s nil) [> _ 20])
        (min 1 (expt (/ (realscore s) it) 2))
        1))
 
@@ -362,12 +362,12 @@
 
 (def topstories (user n (o threshold front-threshold*))
   (retrieve n 
-            [and (>= (realscore _) threshold) (cansee user _)]
+            [and (>= (realscore _) threshold) (cansee _)]
             ranked-stories*))
 
 (= max-delay* 10)
 
-(def cansee (user i)
+(def cansee (i (t user me))
   (if i!deleted   (admin user)
       i!dead      (or (author user i) (seesdead user))
       (delayed i) (author user i)
@@ -385,12 +385,12 @@
   (or (and user (uvar user showdead) (no (ignored user)))
       (editor user)))
 
-(def visible (user is)
-  (keep [cansee user _] is))
+(def visible (is (t user me))
+  (keep [cansee _ user] is))
 
-(def cansee-descendant (user c)
-  (or (cansee user c)
-      (some [cansee-descendant user (item _)] 
+(def cansee-descendant (c (t user me))
+  (or (cansee c user)
+      (some [cansee-descendant (item _) user]
             c!kids)))
   
 (def editor ((t u me))
@@ -858,7 +858,7 @@ function vote(node) {
   (listpage user (msec) (newstories user maxend*) "new" "New Links" "newest"))
 
 (def newstories (user n)
-  (retrieve n [cansee user _] stories*))
+  (retrieve n [cansee _] stories*))
 
 
 (newsop best () (bestpage user))
@@ -869,7 +869,7 @@ function vote(node) {
 ; As no of stories gets huge, could test visibility in fn sent to best.
 
 (def beststories (user n)
-  (bestn n (compare > realscore) (visible user stories*)))
+  (bestn n (compare > realscore) (visible stories*)))
 
 
 (newsop noobstories () (noobspage user stories*))
@@ -879,7 +879,7 @@ function vote(node) {
   (listpage user (msec) (noobs user maxend* source) "noobs" "New Accounts"))
 
 (def noobs (user n source)
-  (retrieve n [and (cansee user _) (bynoob _)] source))
+  (retrieve n [and (cansee _) (bynoob _)] source))
 
 (def bynoob (i)
   (< (- (user-age i!by) (item-age i)) 2880))
@@ -892,7 +892,7 @@ function vote(node) {
             "best comments" "Best Comments" "bestcomments" nil))
 
 (def bestcomments (user n)
-  (bestn n (compare > realscore) (visible user comments*)))
+  (bestn n (compare > realscore) (visible comments*)))
 
 
 (newsop lists () 
@@ -924,7 +924,7 @@ function vote(node) {
       (pr "Can't display that.")))
 
 (def voted-stories (user)
-  (keep [and (astory _) (cansee (the me) _)]
+  (keep [and (astory _) (cansee _)]
         (map item (keys:votes user))))
 
 
@@ -964,7 +964,7 @@ function vote(node) {
     (pr "More")))
 
 (def display-story (i s user whence)
-  (when (or (cansee user s) (s 'kids))
+  (when (or (cansee s) (s 'kids))
     (tr (display-item-number i)
         (td (votelinks s user whence))
         (titleline s s!url user whence))
@@ -989,7 +989,7 @@ function vote(node) {
 
 (def titleline (s url user whence)
   (tag (td class 'title)
-    (if (cansee user s)
+    (if (cansee s)
         (do (deadmark s user)
             (titlelink s url user)
             (pdflink url)
@@ -1049,14 +1049,14 @@ function vote(node) {
       
 (def votelinks (i user whence (o downtoo))
   (center
-    (if (and (cansee user i)
+    (if (and (cansee i)
              (or (no user)
                  (no ((votes user) i!id))))
          (do (votelink i user whence 'up)
              (if (and downtoo 
                       (or (admin user)
                           (< (item-age i) downvote-time*))
-                      (canvote user i 'down))
+                      (canvote i 'down))
                  (do (br)
                      (votelink i user whence 'down))
                  ; don't understand why needed, but is, or a new
@@ -1092,7 +1092,7 @@ function vote(node) {
 ; Not much stricter than whether to generate the arrow.  Further tests 
 ; applied in vote-for.
 
-(def canvote (user i dir)
+(def canvote (i dir (t user me))
   (and user
        (news-type&live i)
        (or (is dir 'up) (> i!score lowest-score*))
@@ -1121,17 +1121,17 @@ function vote(node) {
                      (list (fn (u ip)
                              (ensure-news-user u)
                              (newslog ip u 'vote-login)
-                             (when (canvote u i dir)
+                             (when (canvote i dir u)
                                (vote-for u i dir)
                                (logvote ip u i)))
                            whence))
-        (canvote user i dir)
+        (canvote i dir)
          (do (vote-for by i dir)
              (logvote ip by i))
          (pr "Can't make that vote."))))
 
 (def itemline (i user)
-  (when (cansee user i) 
+  (when (cansee i) 
     (when (news-type i) (itemscore i user))
     (byline i user)))
 
@@ -1167,19 +1167,19 @@ function vote(node) {
 (= show-threadavg* nil)
 
 (def commentlink (i user)
-  (when (cansee user i) 
+  (when (cansee i) 
     (pr bar*)
     (tag (a href (item-url i!id))
-      (let n (- (visible-family user i) 1)
+      (let n (- (visible-family i) 1)
         (if (> n 0)
             (do (pr (plural n "comment"))
                 (awhen (and show-threadavg* (admin user) (threadavg i))
                   (pr " (@(num it 1 t t))")))
             (pr "discuss"))))))
 
-(def visible-family (user i)
-  (+ (if (cansee user i) 1 0)
-     (sum [visible-family user (item _)] i!kids)))
+(def visible-family (i (t user me))
+  (+ (if (cansee i user) 1 0)
+     (sum [visible-family (item _) user] i!kids)))
 
 (def threadavg (i)
   (only.avg (map [or (uvar _ avg) 1] 
@@ -1189,10 +1189,10 @@ function vote(node) {
 
 (= everchange* (table) noedit* (table))
 
-(def canedit (user i)
+(def canedit (i (t user me))
   (or (admin user)
       (and (~noedit* i!type)
-           (editor user) 
+           (editor user)
            (< (item-age i) editor-changetime*))
       (own-changeable-item user i)))
 
@@ -1204,7 +1204,7 @@ function vote(node) {
            (< (item-age i) user-changetime*))))
 
 (def editlink (i user)
-  (when (canedit user i)
+  (when (canedit i)
     (pr bar*)
     (link "edit" (edit-url i))))
 
@@ -1278,15 +1278,15 @@ function vote(node) {
     (save-item i)
     (save-prof i!by)))
 
-(def candelete (user i)
+(def candelete (i (t user me))
   (or (admin user) (own-changeable-item user i)))
 
 (def deletelink (i user whence)
-  (when (candelete user i)
+  (when (candelete i)
     (pr bar*)
     (linkf (if i!deleted "undelete" "delete")
       (let user (the me)
-        (if (candelete user i)
+        (if (candelete i)
             (del-confirm-page user i whence)
             (prn "You can't delete that."))))))
 
@@ -1304,7 +1304,7 @@ function vote(node) {
       (spacerow 20)
       (tr (td)
           (td (urform user
-                      (do (when (candelete user i)
+                      (do (when (candelete i)
                             (= i!deleted (is arg!b "Yes"))
                             (save-item i))
                           whence)
@@ -1313,7 +1313,7 @@ function vote(node) {
                  (but "Yes" "b") (sp) (but "No" "b")))))))
 
 (def permalink (story user)
-  (when (cansee user story)
+  (when (cansee story)
     (pr bar*) 
     (link "link" (item-url story!id))))
 
@@ -1755,7 +1755,7 @@ function vote(node) {
       (save-item p))))
 
 (def display-pollopts (p user whence)
-  (each o (visible user (map item p!parts))
+  (each o (visible (map item p!parts))
     (display-pollopt nil o user whence)
     (spacerow 7)))
 
@@ -1765,7 +1765,7 @@ function vote(node) {
         (votelinks o user whence))
       (tag (td class 'comment)
         (tag (div style "margin-top:1px;margin-bottom:0px")
-          (if (~cansee user o) (pr (pseudo-text o))
+          (if (~cansee o) (pr (pseudo-text o))
               (~live o)        (spanclass dead 
                                  (pr (if (~blank o!title) o!title o!text)))
                                (if (and (~blank o!title) (~blank o!url))
@@ -1811,7 +1811,7 @@ function vote(node) {
 (def news-type (i) (and i (in i!type 'story 'comment 'poll 'pollopt)))
 
 (def item-page (user i)
-  (with (title (and (cansee user i)
+  (with (title (and (cansee i)
                     (or i!title (aand i!text (ellipsize (striptags it)))))
          here (item-url i!id))
     (longpage user (msec) nil nil title here
@@ -1821,7 +1821,7 @@ function vote(node) {
              (spacerow 10)
              (tr (td)
                  (td (tab (display-pollopts i user here)))))
-           (when (and (cansee user i) (comments-active i))
+           (when (and (cansee i) (comments-active i))
              (spacerow 10)
              (row "" (comment-form i user here))))
       (br2) 
@@ -1863,7 +1863,7 @@ function vote(node) {
   (aif i!parent (superparent:item it) i))
 
 (def display-item-text (s user)
-  (when (and (cansee user s) 
+  (when (and (cansee s) 
              (in s!type 'story 'poll)
              (blank s!url) 
              (~blank s!text))
@@ -1878,7 +1878,7 @@ function vote(node) {
 (newsop edit (id)
   (let i (safe-item id)
     (if (and i 
-             (cansee user i)
+             (cansee i)
              (editable-type i)
              (or (news-type i) (admin user) (author user i)))
         (edit-page user i)
@@ -1890,7 +1890,7 @@ function vote(node) {
 
 (= (fieldfn* 'story)
    (fn (user s)
-     (with (a (admin user)  e (editor user)  x (canedit user s))
+     (with (a (admin user)  e (editor user)  x (canedit s))
        `((string1 title     ,s!title        t ,x)
          (url     url       ,s!url          t ,e)
          (mdtext2 text      ,s!text         t ,x)
@@ -1898,20 +1898,20 @@ function vote(node) {
 
 (= (fieldfn* 'comment)
    (fn (user c)
-     (with (a (admin user)  e (editor user)  x (canedit user c))
+     (with (a (admin user)  e (editor user)  x (canedit c))
        `((mdtext  text      ,c!text         t ,x)
          ,@(standard-item-fields c a e x)))))
 
 (= (fieldfn* 'poll)
    (fn (user p)
-     (with (a (admin user)  e (editor user)  x (canedit user p))
+     (with (a (admin user)  e (editor user)  x (canedit p))
        `((string1 title     ,p!title        t ,x)
          (mdtext2 text      ,p!text         t ,x)
          ,@(standard-item-fields p a e x)))))
 
 (= (fieldfn* 'pollopt)
    (fn (user p)
-     (with (a (admin user)  e (editor user)  x (canedit user p))
+     (with (a (admin user)  e (editor user)  x (canedit p))
        `((string  title     ,p!title        t ,x)
          (url     url       ,p!url          t ,x)
          (mdtext2 text      ,p!text         t ,x)
@@ -2026,7 +2026,7 @@ function vote(node) {
 ; Comment Display
 
 (def display-comment-tree (c user whence (o indent 0) (o initialpar))
-  (when (cansee-descendant user c)
+  (when (cansee-descendant c)
     (display-1comment c user whence indent initialpar)
     (display-subcomments c user whence (+ indent 1))))
 
@@ -2100,7 +2100,7 @@ function vote(node) {
           (itemline c user)
           (permalink c user)
           (when parent
-            (when (cansee user c) (pr bar*))
+            (when (cansee c) (pr bar*))
             (link "parent" (item-url ((item parent) 'id))))
           (editlink c user)
           (killlink c user whence)
@@ -2114,14 +2114,14 @@ function vote(node) {
             (pr " | on: ")
             (let s (superparent c)
               (link (ellipsize s!title 50) (item-url s!id))))))
-      (when (or parent (cansee user c))
+      (when (or parent (cansee c))
         (br))
       (spanclass comment
-        (if (~cansee user c)               (pr (pseudo-text c))
+        (if (~cansee c)               (pr (pseudo-text c))
             (nor (live c) (author user c)) (spanclass dead (pr c!text))
                                            (fontcolor (comment-color c)
                                              (pr c!text))))
-      (when (and astree (cansee user c) (live c))
+      (when (and astree (cansee c) (live c))
         (para)
         (tag (font size 1)
           (if (and (~mem 'neutered c!keys)
@@ -2180,7 +2180,7 @@ function vote(node) {
               label (if (is (the me) user) "threads" title)
               here  (threads-url user))
         (longpage (the me) (msec) nil label title here
-          (awhen (keep [and (cansee (the me) _) (~subcomment _)]
+          (awhen (keep [and (cansee _) (~subcomment _)]
                        (comments user maxend*))
             (display-threads (the me) it label title here))))
       (prn "No such user.")))
@@ -2232,7 +2232,7 @@ function vote(node) {
             (if (or (no (ignored user))
                     (is me user)
                     (seesdead me))
-                (aif (keep [and (metastory _) (cansee me _)]
+                (aif (keep [and (metastory _) (cansee _)]
                            (submissions user))
                      (display-items me it label label here 0 perpage* t)))))
         (pr "No such user."))))
@@ -2327,7 +2327,7 @@ function vote(node) {
   (listpage user (msec) (actives user) "active" "Active Threads"))
 
 (def actives (user (o n maxend*) (o consider 2000))
-  (visible user (rank-stories n consider (memo active-rank))))
+  (visible (rank-stories n consider (memo active-rank))))
 
 (= active-threshold* 1500)
 
@@ -2341,7 +2341,7 @@ function vote(node) {
 (newsop newcomments () (newcomments-page user))
 
 (newscache newcomments-page user 60
-  (listpage user (msec) (visible user (firstn maxend* comments*))
+  (listpage user (msec) (visible (firstn maxend* comments*))
             "comments" "New Comments" "newcomments" nil))
 
 
