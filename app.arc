@@ -48,14 +48,10 @@
 (defop mismatch req (mismatch-message))
 
 (mac uform (user after . body)
-  `(aform (fn (req)
-            (when-umatch ,user ,after))
-     ,@body))
+  `(aform (when-umatch ,user ,after) ,@body))
 
 (mac urform (user after . body)
-  `(arform (fn (req)
-             (when-umatch/r ,user ,after))
-     ,@body))
+  `(arform (when-umatch/r ,user ,after) ,@body))
 
 ; Like onlink, but checks that user submitting the request is the
 ; same it was generated for.  For extra protection could log the
@@ -94,15 +90,14 @@
         (pr "logout"))
       (when msg (hspace 10) (map pr msg))
       (br2)
-      (aform (fn (req)
-               (when-umatch user
-                 (with (u arg!u p arg!p)
-                   (if (or (no u) (no p) (is u "") (is p ""))
-                        (pr "Bad data.")
-                       (user-exists u)
-                        (admin-page "User already exists: " u)
-                        (do (create-acct u p)
-                            (admin-page))))))
+      (aform (when-umatch user
+               (with (u arg!u p arg!p)
+                 (if (or (no u) (no p) (is u "") (is p ""))
+                      (pr "Bad data.")
+                     (user-exists u)
+                      (admin-page "User already exists: " u)
+                      (do (create-acct u p)
+                          (admin-page)))))
         (pwfields "create (server) account")))))
 
 (def cook-user (user)
@@ -163,17 +158,17 @@
 (def login-form (label switch handler afterward)
   (prbold label)
   (br2)
-  (fnform (fn (req) (handler req switch afterward))
+  (fnform (fn (req) (handler switch afterward))
           (fn () (pwfields (downcase label)))
           (acons afterward)))
 
-(def login-handler (req switch afterward)
+(def login-handler (switch afterward)
   (logout-user (the me))
   (aif (good-login arg!u arg!p (the ip))
        (login it (the ip) (user->cookie* it) afterward)
        (failed-login switch "Bad login." afterward)))
 
-(def create-handler (req switch afterward)
+(def create-handler (switch afterward)
   (logout-user (the me))
   (with (user arg!u pw arg!p)
     (aif (bad-newacct user pw)
@@ -402,9 +397,9 @@
   (let user (the me)
     (taform lasts
             (if (all [no (_ 4)] fields)
-                (fn (req))
-                (fn (req)
-                  (when-umatch user
+                nil
+                (when-umatch user
+                  (let req (the req)
                     (each (k v) req!args
                       (let name (sym k)
                         (awhen (find [is (cadr _) name] fields)
@@ -415,11 +410,11 @@
                                 (unless (is newval fail*)
                                   (f name newval))))))))
                     (done))))
-       (tab
-         (showvars fields))
-       (unless (all [no (_ 4)] fields)  ; no modifiable fields
-         (br)
-         (submit button)))))
+      (tab
+        (showvars fields))
+      (unless (all [no (_ 4)] fields)  ; no modifiable fields
+        (br)
+        (submit button)))))
                 
 (def showvars (fields (o liveurls))
   (each (typ id val view mod question) fields

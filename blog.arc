@@ -54,7 +54,7 @@
 
 (defopl newpost req
   (whitepage
-    (aform [post-page (addpost arg!t arg!b)]
+    (aform (post-page (addpost arg!t arg!b))
       (tab (row "title" (input "t" "" 60))
            (row "text"  (textarea "b" 10 80))
            (row ""      (submit))))))

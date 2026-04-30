@@ -450,55 +450,49 @@ Connection: close"))
 ; Could also make a version that uses just an expr, and var capture.
 ; Is there a way to ensure user doesn't use "fnid" as a key?
 
-(mac aform (f . body)
-  (w/uniq ga
-    `(tag (form method 'post action fnurl*)
-       (fnid-field (fnid (fn (,ga)
-                           (prn)
-                           (,f ,ga))))
-       ,@body)))
+; The aform / arform / taform / tarform / aformh / arformh macros
+; take a HANDLER expression as their first argument (not a function
+; value). The macro wraps it in a one-arg fn for the fnid contract,
+; but callers don't have to. The handler reads its own context
+; through (the req), (the me), arg!key etc.
 
-;(defop test1 req
-;  (fnform (fn (req) (prn) (pr req))
-;          (fn () (single-input "" 'foo 20 "submit"))))
- 
-;(defop test2 req
-;  (aform (fn (req) (pr req))
-;    (single-input "" 'foo 20 "submit")))
-
-; Like aform except creates a fnid that will last for lasts seconds
-; (unless the server is restarted).
-
-(mac taform (lasts f . body)
-  (w/uniq (gl gf gi ga)
-    `(withs (,gl ,lasts
-             ,gf (fn (,ga) (prn) (,f ,ga)))
-       (tag (form method 'post action fnurl*)
-         (fnid-field (if ,gl (timed-fnid ,gl ,gf) (fnid ,gf)))
-         ,@body))))
-
-(mac arform (f . body)
-  `(tag (form method 'post action rfnurl*)
-     (fnid-field (fnid ,f))
-     ,@body))
-
-; overlong
-
-(mac tarform (lasts f . body)
-  (w/uniq (gl gf)
-    `(withs (,gl ,lasts ,gf ,f)
-       (tag (form method 'post action rfnurl*)
-         (fnid-field (if ,gl (timed-fnid ,gl ,gf) (fnid ,gf)))
-         ,@body))))
-
-(mac aformh (f . body)
+(mac aform (handler . body)
   `(tag (form method 'post action fnurl*)
-     (fnid-field (fnid ,f))
+     (fnid-field (fnid (fn (req) (prn) ,handler)))
      ,@body))
 
-(mac arformh (f . body)
+(mac arform (handler . body)
+  `(tag (form method 'post action rfnurl*)
+     (fnid-field (fnid (fn (req) ,handler)))
+     ,@body))
+
+; aform / arform variants with a fnid lifetime in seconds.
+
+(mac taform (lasts handler . body)
+  (w/uniq gh
+    `(let ,gh (fn (req) (prn) ,handler)
+       (tag (form method 'post action fnurl*)
+         (fnid-field (if ,lasts (timed-fnid ,lasts ,gh) (fnid ,gh)))
+         ,@body))))
+
+(mac tarform (lasts handler . body)
+  (w/uniq gh
+    `(let ,gh (fn (req) ,handler)
+       (tag (form method 'post action rfnurl*)
+         (fnid-field (if ,lasts (timed-fnid ,lasts ,gh) (fnid ,gh)))
+         ,@body))))
+
+; aform / arform variants where the body should manage its own
+; HTTP headers (no implicit blank line before content).
+
+(mac aformh (handler . body)
+  `(tag (form method 'post action fnurl*)
+     (fnid-field (fnid (fn (req) ,handler)))
+     ,@body))
+
+(mac arformh (handler . body)
   `(tag (form method 'post action rfnurl2*)
-     (fnid-field (fnid ,f))
+     (fnid-field (fnid (fn (req) ,handler)))
      ,@body))
 
 ; only unique per server invocation
