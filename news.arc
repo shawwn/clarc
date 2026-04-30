@@ -142,8 +142,7 @@
 ; news app need to call this in the after-login fn.
 
 (def ensure-news-user ()
-  (let u (me)
-    (if (profile u) u (init-user u))))
+  (profile (me)))
 
 (def save-votes (u) (save-table (votes* u) (+ votedir* u)))
 
