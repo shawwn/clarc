@@ -141,8 +141,9 @@
 ; See the admin op in app.arc.  So all calls to login-page from the 
 ; news app need to call this in the after-login fn.
 
-(def ensure-news-user (u)
-  (if (profile u) u (init-user u)))
+(def ensure-news-user ()
+  (let u (the me)
+    (if (profile u) u (init-user u))))
 
 (def save-votes (u) (save-table (votes* u) (+ votedir* u)))
 
@@ -270,7 +271,7 @@
 (def loaded-items (test)
   (accum a (each-loaded-item i (test&a i))))
 
-(def newslog args (apply srvlog 'news args))
+(def newslog args (apply srvlog 'news (the ip) (the me) args))
 
 
 ; Ranking
@@ -432,7 +433,7 @@
        (npage (+ this-site* (if ,gt (+ bar* ,gt) ""))
          (if (check-procrast)
              (do (pagetop 'full ,gi ,gl ,gt ,gw)
-                 (hook 'page (the me) ,gl)
+                 (hook 'page ,gl)
                  ,@body)
              (row (procrast-msg ,gw)))))))
 
@@ -456,7 +457,7 @@
       (pr (round (/ (memory) 1000000)) " mb")
       (pr elapsed " msec")
       (link "settings" "newsadmin")
-      (hook 'admin-bar (the me) whence))))
+      (hook 'admin-bar whence))))
 
 (def color-stripe (c)
   (tag (table width "100%" cellspacing 0 cellpadding 1)
@@ -595,7 +596,7 @@ function vote(node) {
                    (spanclass pagetop (topright whence)))
                  (tag (td style "line-height:12pt; height:10px;")
                    (spanclass pagetop (prbold label))))))))
-  (map [_ (the me)] pagefns*)
+  (each f pagefns* (f))
   (spacerow 10))
 
 (def gen-logo ()
@@ -619,7 +620,7 @@ function vote(node) {
       (toplink "threads" (threads-url user) label))
     (toplink "comments" "newcomments" label)
     (toplink "leaders"  "leaders"     label)
-    (hook 'toprow user label)
+    (hook 'toprow label)
     (link "submit")
     (unless (mem label toplabels*)
       (fontcolor white (pr label)))))
@@ -640,9 +641,9 @@ function vote(node) {
           whence))
       (onlink "login"
         (login-page 'both nil
-                    (list (fn (u ip)
-                            (ensure-news-user u)
-                            (newslog ip u 'top-login))
+                    (list (fn ()
+                            (ensure-news-user)
+                            (newslog 'top-login))
                           whence)))))
 
 (def noob ((t user me))
@@ -656,7 +657,7 @@ function vote(node) {
      (if (,test (the me))
          (do ,@body)
          (login-page 'both (+ "Please log in" ,msg ".")
-                     (list (fn (u ip) (ensure-news-user u))
+                     (list (fn () (ensure-news-user))
                            (string ',name (reassemble-args (the req))))))))
 
 (mac defopg (name . body) `(defopt ,name idfn ""                   ,@body))
@@ -668,7 +669,7 @@ function vote(node) {
      (with (user (the me) ip (the ip))
        (with ,(and parms (mappend [list _ (list 'arg (list 'quote _))]
                                   parms))
-         (newslog ip user ',name ,@parms)
+         (newslog ',name ,@parms)
          ,@body))))
 
 (= newsop-names* nil)
@@ -695,7 +696,7 @@ function vote(node) {
 ; News Admin
 
 (defopa newsadmin
-  (newslog (the ip) (the me) 'newsadmin)
+  (newslog 'newsadmin)
   (newsadmin-page))
 
 ; Note that caching* is reset to val in source when restart server.
@@ -750,7 +751,7 @@ function vote(node) {
       (when (some acomment:item (uvar user submitted))
         (sp)
         (underlink "comments" (threads-url user)))
-      (hook 'user (the me) user))))
+      (hook 'user user))))
 
 (def profile-form (user)
   (let prof (profile user)
@@ -842,7 +843,7 @@ function vote(node) {
   (listpage (msec) (topstories maxend*) nil nil "news"))
 
 (def listpage (t1 items label title (o url label) (o number t))
-  (hook 'listpage (the me))
+  (hook 'listpage)
   (longpage t1 nil label title url
     (display-items items label title url 0 perpage* number)))
 
@@ -904,7 +905,7 @@ function vote(node) {
       (when (admin user)
         (map row:link
              '(optimes topips flagged killed badguys badlogins goodlogins)))
-      (hook 'listspage user))))
+      (hook 'listspage))))
 
 
 (def saved-url (user) (+ "saved?id=" user))
@@ -954,7 +955,7 @@ function vote(node) {
             (afnid (fn ()
                      (prn)
                      (let url (url-for it)     ; it bound by afnid
-                       (newslog (the ip) (the me) 'more label)
+                       (newslog 'more label)
                        (longpage (msec) nil label title url
                          (apply f items label title url args))))))
           rel 'nofollow)
@@ -967,7 +968,7 @@ function vote(node) {
         (titleline s s!url whence))
     (tr (tag (td colspan (if i 2 1)))
         (tag (td class 'subtext)
-          (hook 'itemline s user)
+          (hook 'itemline s)
           (itemline s)
           (when (in s!type 'story 'poll) (commentlink s))
           (editlink s)
@@ -1115,16 +1116,16 @@ function vote(node) {
          (pr "User mismatch.")
         (no user)
          (login-page 'both "You have to be logged in to vote."
-                     (list (fn (u ip)
-                             (ensure-news-user u)
-                             (newslog ip u 'vote-login)
-                             (when (canvote i dir u)
-                               (vote-for u i dir)
-                               (logvote ip u i)))
+                     (list (fn ()
+                             (ensure-news-user)
+                             (newslog 'vote-login)
+                             (when (canvote i dir)
+                               (vote-for (the me) i dir)
+                               (logvote i)))
                            whence))
         (canvote i dir)
          (do (vote-for by i dir)
-             (logvote ip by i))
+             (logvote i))
          (pr "Can't make that vote."))))
 
 (def itemline (i)
@@ -1312,8 +1313,8 @@ function vote(node) {
     (pr bar*)
     (link "link" (item-url story!id))))
 
-(def logvote (ip user story)
-  (newslog ip user 'vote (story 'id) (list (story 'title))))
+(def logvote (story)
+  (newslog 'vote (story 'id) (list (story 'title))))
 
 (def text-age (a)
   (tostring
@@ -1424,9 +1425,9 @@ function vote(node) {
 
 (def submit-login-warning ((o url) (o title) (o showtext) (o text))
   (login-page 'both "You have to be logged in to submit."
-              (fn (user ip)
-                (ensure-news-user user)
-                (newslog ip user 'submit-login)
+              (fn ()
+                (ensure-news-user)
+                (newslog 'submit-login)
                 (submit-page url title showtext text))))
 
 (def submit-page ((o url) (o title) (o showtext) (o text "") (o msg))
@@ -1572,7 +1573,7 @@ function vote(node) {
                    "eurekster" "blogsome" "edogo" "blog" "com"))
 
 (def create-story (url title text user ip)
-  (newslog ip user 'create url (list title))
+  (newslog 'create url (list title))
   (let s (inst 'item 'type 'story 'id (new-item-id) 
                      'url url 'title title 'text text 'by user 'ip ip)
     (save-item s)
@@ -1627,7 +1628,7 @@ function vote(node) {
 (def story-ban-test (user i ip url)
   (site-ban-test user i url)
   (ip-ban-test i ip)
-  (hook 'story-ban-test user i ip url))
+  (hook 'story-ban-test i url))
 
 (def site-ban-test (user i url)
   (whenlet ban (banned-sites* (sitename url))
@@ -1712,7 +1713,7 @@ function vote(node) {
         "newest")))
 
 (def create-poll (title text opts user ip)
-  (newslog ip user 'create-poll title)
+  (newslog 'create-poll title)
   (let p (inst 'item 'type 'poll 'id (new-item-id)
                      'title title 'text text 'by user 'ip ip)
     (= p!parts (map get!id (map [create-pollopt p nil nil _ user ip]
@@ -1938,7 +1939,7 @@ function vote(node) {
                         (metastory&adjust-rank i)
                         (wipe (comment-cache* i!id))
                         (edit-page i)))
-      (hook 'edit (the me) i))))
+      (hook 'edit i))))
 
 (def ignore-edit (i name val)
   (case name title (len> val title-limit*)
@@ -1949,9 +1950,9 @@ function vote(node) {
 
 (def comment-login-warning (parent whence (o text))
   (login-page 'both "You have to be logged in to comment."
-              (fn (u ip)
-                (ensure-news-user u)
-                (newslog ip u 'comment-login)
+              (fn ()
+                (ensure-news-user)
+                (newslog 'comment-login)
                 (addcomment-page parent whence text))))
 
 (def addcomment-page (parent whence (o text) (o msg))
@@ -2002,7 +2003,7 @@ function vote(node) {
   (or (ignored u) (< (karma u) comment-threshold*)))
 
 (def create-comment (parent text user ip)
-  (newslog ip user 'comment (parent 'id))
+  (newslog 'comment (parent 'id))
   (let c (inst 'item 'type 'comment 'id (new-item-id)
                      'text text 'parent parent!id 'by user 'ip ip)
     (save-item c)
@@ -2142,9 +2143,9 @@ function vote(node) {
         (if user
             (addcomment-page i whence)
             (login-page 'both "You have to be logged in to comment."
-                        (fn (u ip)
-                          (ensure-news-user u)
-                          (newslog ip u 'comment-login)
+                        (fn ()
+                          (ensure-news-user)
+                          (newslog 'comment-login)
                           (addcomment-page i whence))))
         (pr "No such item."))))
 
