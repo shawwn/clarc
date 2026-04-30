@@ -75,7 +75,7 @@
 ; same it was generated for.  For extra protection could log the
 ; username and ip addr of every genlink, and check if they match.
 
-(mac ulink (user text . body)
+(mac ulink (text . body)
   (w/uniq g
     `(let ,g (me)
        (linkf ,text (when-umatch ,g ,@body)))))
