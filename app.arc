@@ -76,7 +76,14 @@
 ; username and ip addr of every genlink, and check if they match.
 
 (mac ulink (user text . body)
-  `(linkf ,text (when-umatch ,user ,@body)))
+  (w/uniq g
+    `(let ,g (me)
+       (linkf ,text (when-umatch ,g ,@body)))))
+
+(mac urlink (text . body)
+  (w/uniq g
+    `(let ,g (me)
+      (rlinkf ,text (when-umatch/r ,g ,@body)))))
 
 
 (defop admin (admin-gate))
@@ -102,14 +109,13 @@
         (pr "logout"))
       (when msg (hspace 10) (map pr msg))
       (br2)
-      (aform (when-umatch user
-               (with (u arg!u p arg!p)
-                 (if (or (no u) (no p) (is u "") (is p ""))
-                      (pr "Bad data.")
-                     (user-exists u)
-                      (admin-page "User already exists: " u)
-                      (do (create-acct u p)
-                          (admin-page)))))
+      (uform (with (u arg!u p arg!p)
+               (if (or (no u) (no p) (is u "") (is p ""))
+                    (pr "Bad data.")
+                   (user-exists u)
+                    (admin-page "User already exists: " u)
+                    (do (create-acct u p)
+                        (admin-page))))
         (pwfields "create (server) account")))))
 
 (def cook-user (user)
@@ -125,7 +131,7 @@
   (let id (unique-id)
     (if (cookie->user* id) (new-user-cookie) id)))
 
-(def logout-user (user)
+(def logout-user ((t user me))
   (wipe (logins* user))
   (wipe (cookie->user* (user->cookie* user)) (user->cookie* user))
   (save-table cookie->user* cookfile*))
@@ -175,13 +181,13 @@
           (acons afterward)))
 
 (def login-handler (switch afterward)
-  (logout-user (me))
+  (logout-user)
   (aif (good-login arg!u arg!p (ip))
        (login it (ip) (user->cookie* it) afterward)
        (failed-login switch "Bad login." afterward)))
 
 (def create-handler (switch afterward)
-  (logout-user (me))
+  (logout-user)
   (with (user arg!u pw arg!p)
     (aif (bad-newacct user pw)
          (failed-login switch it afterward)
@@ -264,10 +270,10 @@
        str))
 
 (defop logout
-  (aif (me)
-       (do (logout-user it)
-           (pr "Logged out."))
-       (pr "You were not logged in.")))
+  (if (me)
+      (do (logout-user)
+          (pr "Logged out."))
+      (pr "You were not logged in.")))
 
 (defop whoami
   (aif (me)

@@ -21,10 +21,10 @@
       (tag (table border 0 cellspacing 10)
         (each app (dir (+ appdir* user))
           (tr (td app)
-              (td (ulink user 'edit   (edit-app app)))
-              (td (ulink user 'run    (run-app  app)))
+              (td (ulink 'edit   (edit-app app)))
+              (td (ulink 'run    (run-app  app)))
               (td (hspace 40)
-                  (ulink user 'delete (rem-app  app))))))
+                  (ulink 'delete (rem-app  app))))))
       (br2)
       (aform (when-umatch user
                (aif (goodname arg!app)

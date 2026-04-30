@@ -150,8 +150,12 @@
 
 (mac uvar (u k) `((profile ,u) ',k))
 
-(mac karma   (u) `(uvar ,u karma))
-(mac ignored (u) `(uvar ,u ignore))
+; '(me) (quoted) rather than (t u me): macro defaults evaluate
+; at expansion time, so (t u me) would bake in (the me)'s value
+; at compile time -- nil -- in every call site. The quoted form
+; keeps (me) in the expansion to be evaluated at each runtime call.
+(mac karma   ((o u '(me))) `(uvar ,u karma))
+(mac ignored ((o u '(me))) `(uvar ,u ignore))
 
 ; Note that users will now only consider currently loaded users.
 
@@ -610,13 +614,11 @@ function vote(node) {
 
 (= welcome-url* "welcome")
 
-(def toprow (label (t user me))
+(def toprow (label)
   (w/bars
-    (when (noob user)
-      (toplink "welcome" welcome-url* label))
+    (if (noob) (toplink "welcome" welcome-url* label))
     (toplink "new" "newest" label)
-    (when user
-      (toplink "threads" (threads-url user) label))
+    (if (me) (toplink "threads" (threads-url) label))
     (toplink "comments" "newcomments" label)
     (toplink "leaders"  "leaders"     label)
     (hook 'toprow label)
@@ -628,16 +630,13 @@ function vote(node) {
   (tag-if (is name label) (span class 'topsel)
     (link name dest)))
 
-(def topright (whence (o showkarma t) (t user me))
-  (when user
-    (userlink user nil)
-    (when showkarma (pr  "&nbsp;(@(karma user))"))
+(def topright (whence (o showkarma t))
+  (when (me)
+    (userlink (me) nil)
+    (when showkarma (pr  "&nbsp;(@(karma))"))
     (pr "&nbsp;|&nbsp;"))
-  (if user
-      (rlinkf 'logout
-        (when-umatch/r user
-          (logout-user user)
-          whence))
+  (if (me)
+      (urlink 'logout (logout-user) whence)
       (onlink "login"
         (login-page 'both nil
                     (list (fn ()
@@ -2156,7 +2155,7 @@ function vote(node) {
 
 ; Threads
 
-(def threads-url (user) (+ "threads?id=" user))
+(def threads-url ((t user me)) (+ "threads?id=" user))
 
 (newsop threads (id)
   (if id
