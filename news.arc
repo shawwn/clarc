@@ -106,11 +106,23 @@
 ; Have to check goodname because some user ids come from http requests.
 ; So this is like safe-item.  Don't need a sep fn there though.
 
+; A valid registered user (one in hpasswords*) is auto-given a
+; fresh news profile if they don't have one yet --- this happens
+; for accounts created via app.arc's plain login form, which
+; doesn't fire news.arc's ensure-news-user callback. Without
+; this, (uvar user k) would call NIL as a function and crash
+; the request. Invalid / unknown user ids still return nil.
+;
+; init-user sets (profs* u) and returns u (the username), not the
+; profile, so we read it back from profs* after init.
 (def profile (u)
   (or (profs* u)
       (aand (goodname u)
-            (file-exists (+ profdir* u))
-            (= (profs* u) (temload 'profile it)))))
+            (or (and (file-exists (+ profdir* u))
+                     (= (profs* u) (temload 'profile (+ profdir* u))))
+                (when (hpasswords* u)
+                  (init-user u)
+                  (profs* u))))))
 
 (def votes (u)
   (or (votes* u)
