@@ -404,7 +404,7 @@
 
 (= up-url* "grayarrow.gif" down-url* "graydown.gif" logo-url* "arc.png")
 
-(defopr favicon.ico req favicon-url*)
+(defopr favicon.ico favicon-url*)
 
 ; redefined later
 
@@ -483,7 +483,7 @@
 
 ; turn off server caching via (= caching* 0) or won't see changes
 
-(defop news.css req
+(defop news.css
   (pr "
 body  { font-family:Verdana; font-size:10pt; color:#828282; }
 td    { font-family:Verdana; font-size:10pt; color:#828282; }
@@ -634,7 +634,7 @@ function vote(node) {
     (when showkarma (pr  "&nbsp;(@(karma user))"))
     (pr "&nbsp;|&nbsp;"))
   (if user
-      (rlinkf 'logout (req)
+      (rlinkf 'logout
         (when-umatch/r user
           (logout-user user)
           whence))
@@ -651,31 +651,25 @@ function vote(node) {
 
 ; News-Specific Defop Variants
 
-(mac defopt (name parm test msg . body)
-  `(defop ,name ,parm
+(mac defopt (name test msg . body)
+  `(defop ,name
      (if (,test (the me))
          (do ,@body)
          (login-page 'both (+ "Please log in" ,msg ".")
                      (list (fn (u ip) (ensure-news-user u))
-                           (string ',name (reassemble-args ,parm)))))))
+                           (string ',name (reassemble-args (the req))))))))
 
-(mac defopg (name parm . body)
-  `(defopt ,name ,parm idfn "" ,@body))
-
-(mac defope (name parm . body)
-  `(defopt ,name ,parm editor " as an editor" ,@body))
-
-(mac defopa (name parm . body)
-  `(defopt ,name ,parm admin " as an administrator" ,@body))
+(mac defopg (name . body) `(defopt ,name idfn ""                   ,@body))
+(mac defope (name . body) `(defopt ,name editor " as an editor"    ,@body))
+(mac defopa (name . body) `(defopt ,name admin  " as an administrator" ,@body))
 
 (mac opexpand (definer name parms . body)
-  (w/uniq gr
-    `(,definer ,name ,gr
-       (with (user (the me) ip (the ip))
-         (with ,(and parms (mappend [list _ (list 'arg (list 'quote _))]
-                                    parms))
-           (newslog ip user ',name ,@parms)
-           ,@body)))))
+  `(,definer ,name
+     (with (user (the me) ip (the ip))
+       (with ,(and parms (mappend [list _ (list 'arg (list 'quote _))]
+                                  parms))
+         (newslog ip user ',name ,@parms)
+         ,@body))))
 
 (= newsop-names* nil)
 
@@ -700,7 +694,7 @@ function vote(node) {
 
 ; News Admin
 
-(defopa newsadmin req
+(defopa newsadmin
   (let user (the me)
     (newslog (the ip) user 'newsadmin)
     (newsadmin-page user)))
@@ -958,7 +952,7 @@ function vote(node) {
 (def morelink (f items label title . args)
   (tag (a href 
           (url-for
-            (afnid (fn (req)
+            (afnid (fn ()
                      (prn)
                      (with (url  (url-for it)     ; it bound by afnid
                             user (the me))
@@ -1289,7 +1283,7 @@ function vote(node) {
 (def deletelink (i user whence)
   (when (candelete user i)
     (pr bar*)
-    (linkf (if i!deleted "undelete" "delete") (req)
+    (linkf (if i!deleted "undelete" "delete")
       (let user (the me)
         (if (candelete user i)
             (del-confirm-page user i whence)
@@ -2347,7 +2341,7 @@ function vote(node) {
 
 ; Doc
 
-(defop formatdoc req
+(defop formatdoc
   (msgpage (the me) formatdoc* "Formatting Options"))
 
 (= formatdoc-url* "formatdoc")
@@ -2405,7 +2399,7 @@ first asterisk isn't whitespace.
 
 ; Reset PW
 
-(defopg resetpw req (resetpw-page (the me)))
+(defopg resetpw (resetpw-page (the me)))
 
 (def resetpw-page (user (o msg))
   (minipage "Reset Password"
@@ -2430,7 +2424,7 @@ first asterisk isn't whitespace.
 
 ; Scrubrules
 
-(defopa scrubrules req
+(defopa scrubrules
   (scrub-page (the me) scrubrules*))
 
 ; If have other global alists, generalize an alist edit page.
@@ -2616,7 +2610,7 @@ first asterisk isn't whitespace.
               (tdr:prt n)
               (tdr:prt (and n (round (/ (* n ms) 1000))))))))))
 
-(defop topcolors req
+(defop topcolors
   (minipage "Custom Colors"
     (tab 
       (each c (dedup (map downcase (trues [uvar _ topcolor] (users))))

@@ -183,18 +183,21 @@ Connection: close"))
   `(= (redirector* ',name) t
       (srvops* ',name)     (fn ,parms ,@body)))
 
-(mac defop (name parm . body)
-  (w/uniq gs
+; Body has access to the request via (the req). Use arg!key to
+; pull request args, (the me) for the logged-in user, (the ip)
+; for the source IP --- all without explicit parameter threading.
+(mac defop (name . body)
+  (w/uniq (gs gr)
     `(do (wipe (redirector* ',name))
-         (defop-raw ,name (,gs ,parm) 
+         (defop-raw ,name (,gs ,gr)
            (w/stdout ,gs (prn) ,@body)))))
 
 ; Defines op as a redirector.  Its retval is new location.
 
-(mac defopr (name parm . body)
-  (w/uniq gs
+(mac defopr (name . body)
+  (w/uniq (gs gr)
     `(do (set (redirector* ',name))
-         (defop-raw ,name (,gs ,parm)
+         (defop-raw ,name (,gs ,gr)
            ,@body))))
 
 ;(mac testop (name . args) `((srvops* ',name) ,@args))
@@ -370,15 +373,18 @@ Connection: close"))
 
 (= dead-msg* "\nUnknown or expired link.")
  
+; Stored fnid fns are thunks --- they pull req/me/ip from the
+; thread-locals bound in respond. Dispatch calls them with no args.
+
 (defop-raw x (str req)
-  (w/stdout str 
+  (w/stdout str
     (aif (fns* (sym arg!fnid))
-         (it req)
+         (it)
          (pr dead-msg*))))
 
 (defopr-raw y (str req)
   (aif (fns* (sym arg!fnid))
-       (w/stdout str (it req))
+       (w/stdout str (it))
        "deadlink"))
 
 ; For asynchronous calls; discards the page.  Would be better to tell
@@ -386,33 +392,34 @@ Connection: close"))
 
 (defop-raw a (str req)
   (aif (fns* (sym arg!fnid))
-       (tostring (it req))))
+       (tostring (it))))
 
-(defopr r req
+(defopr r
   (aif (fns* (sym arg!fnid))
-       (it req)
+       (it)
        "deadlink"))
 
-(defop deadlink req
+(defop deadlink
   (pr dead-msg*))
 
 (def url-for (fnid)
   (string fnurl* "?fnid=" fnid))
 
+; flink / rflink take a thunk. flink wraps it with (prn) so the
+; generated page starts after a blank line; rflink just stores it
+; (its return value is the redirect URL).
 (def flink (f)
-  (string fnurl* "?fnid=" (fnid (fn (req) (prn) (f req)))))
+  (string fnurl* "?fnid=" (fnid (fn () (prn) (f)))))
 
 (def rflink (f)
   (string rfnurl* "?fnid=" (fnid f)))
-  
-; Since it's just an expr, gensym a parm for (ignored) args.
 
 (mac w/link (expr . body)
-  `(tag (a href (flink (fn (,(uniq)) ,expr)))
+  `(tag (a href (flink (fn () ,expr)))
      ,@body))
 
 (mac w/rlink (expr . body)
-  `(tag (a href (rflink (fn (,(uniq)) ,expr)))
+  `(tag (a href (rflink (fn () ,expr)))
      ,@body))
 
 (mac onlink (text . body)
@@ -423,11 +430,11 @@ Connection: close"))
 
 ; bad to have both flink and linkf; rename flink something like fnid-link
 
-(mac linkf (text parms . body)
-  `(tag (a href (flink (fn ,parms ,@body))) (pr ,text)))
+(mac linkf (text . body)
+  `(tag (a href (flink (fn () ,@body))) (pr ,text)))
 
-(mac rlinkf (text parms . body)
-  `(tag (a href (rflink (fn ,parms ,@body))) (pr ,text)))
+(mac rlinkf (text . body)
+  `(tag (a href (rflink (fn () ,@body))) (pr ,text)))
 
 ;(defop top req (linkf 'whoami? (req) (pr "I am " (get-user req))))
 
@@ -522,9 +529,9 @@ Connection: close"))
 
 )
 
-(defop || req (pr "It's alive."))
+(defop || (pr "It's alive."))
 
-(defop topips req
+(defop topips
   (when (admin (the me))
     (whitepage
       (sptab
@@ -539,7 +546,7 @@ Connection: close"))
           (let n (requests/ip* ip)
             (row ip n (pr (num (* 100 (/ n requests*)) 1)))))))))
 
-(defop spurned req
+(defop spurned
   (when (admin (the me))
     (whitepage
       (sptab

@@ -33,9 +33,9 @@
          (w/bars (link "archive")
                  (link "new post" "newpost"))))))
 
-(defop viewpost req (blogop post-page req))
+(defop viewpost (blogop post-page))
 
-(def blogop (f req)
+(def blogop (f)
   (aif (post arg!id)
        (f it)
        (blogpage (pr "No such post."))))
@@ -52,7 +52,7 @@
   (br2)
   (pr p!text))
 
-(defopl newpost req
+(defopl newpost
   (whitepage
     (aform (post-page (addpost arg!t arg!b))
       (tab (row "title" (input "t" "" 60))
@@ -64,7 +64,7 @@
     (save-post p)
     (= (posts* p!id) p)))
 
-(defopl editpost req (blogop edit-page req))
+(defopl editpost (blogop edit-page))
 
 (def edit-page (p)
   (whitepage
@@ -73,13 +73,13 @@
                (fn () (save-post p)
                       (post-page p)))))
 
-(defop archive req
+(defop archive
   (blogpage
     (tag ul
       (each p (map post (rev (range 1 maxid*)))
         (tag li (link p!title (permalink p)))))))
 
-(defop blog req
+(defop blog
   (blogpage
     (for i 0 4
       (awhen (posts* (- maxid* i))
