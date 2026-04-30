@@ -45,7 +45,7 @@
        (do ,@body)
        "mismatch"))
 
-(defop mismatch req (mismatch-message))
+(defop mismatch (mismatch-message))
 
 (mac uform (user after . body)
   `(aform (when-umatch ,user ,after) ,@body))
@@ -58,11 +58,10 @@
 ; username and ip addr of every genlink, and check if they match.
 
 (mac ulink (user text . body)
-  `(linkf ,text (,(uniq))
-     (when-umatch ,user ,@body)))
+  `(linkf ,text (when-umatch ,user ,@body)))
 
 
-(defop admin req (admin-gate))
+(defop admin (admin-gate))
 
 ; (t me) parameter lets the post-login callback pass the
 ; freshly-logged-in user, which is otherwise still nil in the
@@ -133,7 +132,7 @@
 (def hello-page (user ip)
   (whitepage (prs "hello" user "at" ip)))
 
-(defop login req (login-page 'login))
+(defop login (login-page 'login))
 
 ; switch is one of: register, login, both
 
@@ -158,7 +157,7 @@
 (def login-form (label switch handler afterward)
   (prbold label)
   (br2)
-  (fnform (fn (req) (handler switch afterward))
+  (fnform (fn () (handler switch afterward))
           (fn () (pwfields (downcase label)))
           (acons afterward)))
 
@@ -250,13 +249,13 @@
        (or (no max) (<= (len str) max))
        str))
 
-(defop logout req
+(defop logout
   (aif (the me)
        (do (logout-user it)
            (pr "Logged out."))
        (pr "You were not logged in.")))
 
-(defop whoami req
+(defop whoami
   (aif (the me)
        (prs it 'at (the ip))
        (do (pr "You are not logged in. ")
@@ -661,12 +660,12 @@
        (< 0 m 13)
        (< 0 d 32)))
 
-(mac defopl (name parm . body)
-  `(defop ,name ,parm
+(mac defopl (name . body)
+  `(defop ,name
      (if (the me)
          (do ,@body)
          (login-page 'both
                      "You need to be logged in to do that."
                      (list (fn (u ip))
-                           (string ',name (reassemble-args ,parm)))))))
+                           (string ',name (reassemble-args (the req))))))))
 

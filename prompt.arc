@@ -2,7 +2,7 @@
 
 (= appdir* "arc/apps/")
 
-(defop prompt req
+(defop prompt
   (if (admin (the me))
       (prompt-page)
       (pr "Sorry.")))
@@ -87,12 +87,12 @@
 
 (wipe repl-history*)
 
-(defop repl req
+(defop repl
   (if (admin (the me))
-      (replpage req)
+      (replpage)
       (pr "Sorry.")))
 
-(def replpage (req)
+(def replpage ()
   (whitepage
     (repl (readall (or arg!expr "")) "repl")))
 
