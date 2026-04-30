@@ -446,17 +446,17 @@
                (br)
                (center
                  (hook 'longfoot)
-                 (admin-bar ,gu (- (msec) ,gt) ,whence)))))))
+                 (admin-bar (- (msec) ,gt) ,whence)))))))
 
-(def admin-bar (user elapsed whence)
-  (when (admin user)
+(def admin-bar (elapsed whence)
+  (when (admin)
     (br2)
     (w/bars
       (pr (len items*) "/" maxid* " loaded")
       (pr (round (/ (memory) 1000000)) " mb")
       (pr elapsed " msec")
       (link "settings" "newsadmin")
-      (hook 'admin-bar user whence))))
+      (hook 'admin-bar (the me) whence))))
 
 (def color-stripe (c)
   (tag (table width "100%" cellspacing 0 cellpadding 1)
