@@ -973,7 +973,7 @@ function vote(node) {
           (itemline s)
           (when (in s!type 'story 'poll) (commentlink s))
           (editlink s)
-          (when (apoll s) (addoptlink s user))
+          (when (apoll s) (addoptlink s))
           (unless i (flaglink s user whence))
           (killlink s user whence)
           (blastlink s user whence)
@@ -1207,10 +1207,10 @@ function vote(node) {
     (pr bar*)
     (link "edit" (edit-url i))))
 
-(def addoptlink (p user)
-  (when (or (admin user) (author p))
+(def addoptlink (p)
+  (when (or (admin) (author p))
     (pr bar*)
-    (onlink "add choice" (add-pollopt-page p user))))
+    (onlink "add choice" (add-pollopt-page p))))
 
 ; reset later
 
@@ -1285,7 +1285,7 @@ function vote(node) {
     (pr bar*)
     (linkf (if i!deleted "undelete" "delete")
       (if (candelete i)
-          (del-confirm-page (the me) i whence)
+          (del-confirm-page i whence)
           (prn "You can't delete that.")))))
 
 ; Undeleting stories could cause a slight inconsistency. If a story
@@ -1294,11 +1294,11 @@ function vote(node) {
 ; stories with equal claim to be in url->story.  (The more recent will
 ; win because it happens to get loaded later.)  Not a big problem.
 
-(def del-confirm-page (user i whence)
+(def del-confirm-page (i whence)
   (minipage "Confirm"
-    (tab 
+    (tab
       ; link never used so not testable but think correct
-      (display-item nil i user (flink [del-confirm-page (the me) i whence]))
+      (display-item nil i (the me) (flink [del-confirm-page i whence]))
       (spacerow 20)
       (tr (td)
           (td (urform (do (when (candelete i)
@@ -1420,22 +1420,21 @@ function vote(node) {
 ; Story Submission
 
 (newsop submit ()
-  (if user 
-      (submit-page user "" "" t) 
+  (if user
+      (submit-page "" "" t)
       (submit-login-warning "" "" t)))
 
 (def submit-login-warning ((o url) (o title) (o showtext) (o text))
   (login-page 'both "You have to be logged in to submit."
-              (fn (user ip) 
+              (fn (user ip)
                 (ensure-news-user user)
                 (newslog ip user 'submit-login)
-                (submit-page user url title showtext text))))
+                (submit-page url title showtext text))))
 
-(def submit-page (user (o url) (o title) (o showtext) (o text "") (o msg))
+(def submit-page ((o url) (o title) (o showtext) (o text "") (o msg))
   (minipage "Submit"
     (pagemessage msg)
-    (urform (process-story (the me)
-                           (clean-url arg!u)
+    (urform (process-story (clean-url arg!u)
                            (striptags arg!t)
                            showtext
                            (and showtext (md-from-form arg!x t))
@@ -1464,8 +1463,8 @@ function vote(node) {
 ; Added a confirm step to avoid xss hacks.
 
 (newsop submitlink (u t)
-  (if user 
-      (submit-page user u t)
+  (if user
+      (submit-page u t)
       (submit-login-warning u t)))
 
 (= title-limit* 80
@@ -1482,28 +1481,28 @@ function vote(node) {
 
 (disktable big-spamsites* (+ newsdir* "big-spamsites"))
 
-(def process-story (user url title showtext text ip)
+(def process-story (url title showtext text ip)
   (aif (and (~blank url) (live-story-w/url url))
-       (do (vote-for user it)
+       (do (vote-for (the me) it)
            (item-url it!id))
-       (if (no user)
+       (if (no (the me))
             (flink [submit-login-warning url title showtext text])
-           (no (and (or (blank url) (valid-url url)) 
+           (no (and (or (blank url) (valid-url url))
                     (~blank title)))
-            (flink [submit-page user url title showtext text retry*])
+            (flink [submit-page url title showtext text retry*])
            (len> title title-limit*)
-            (flink [submit-page user url title showtext text toolong*])
+            (flink [submit-page url title showtext text toolong*])
            (and (blank url) (blank text))
-            (flink [submit-page user url title showtext text bothblank*])
+            (flink [submit-page url title showtext text bothblank*])
            (let site (sitename url)
              (or (big-spamsites* site) (recent-spam site)))
             (flink [msgpage spammage*])
-           (oversubmitting user ip 'story url)
+           (oversubmitting (the me) ip 'story url)
             (flink [msgpage toofast*])
-           (let s (create-story url (process-title title) text user ip)
-             (story-ban-test user s ip url)
-             (when (ignored user) (kill s 'ignored))
-             (submit-item user s)
+           (let s (create-story url (process-title title) text (the me) ip)
+             (story-ban-test (the me) s ip url)
+             (when (ignored (the me)) (kill s 'ignored))
+             (submit-item (the me) s)
              (maybe-ban-ip s)
              "newest"))))
 
@@ -1681,18 +1680,17 @@ function vote(node) {
 
 (newsop newpoll ()
   (if (and user (> (karma user) poll-threshold*))
-      (newpoll-page user)
+      (newpoll-page)
       (pr "Sorry, you need @poll-threshold* karma to create a poll.")))
-  
-(def newpoll-page (user (o title "Poll: ") (o text "") (o opts "") (o msg))
+
+(def newpoll-page ((o title "Poll: ") (o text "") (o opts "") (o msg))
   (minipage "New Poll"
     (pagemessage msg)
-    (urform (process-poll (the me)
-                          (striptags arg!t)
+    (urform (process-poll (striptags arg!t)
                           (md-from-form arg!x t)
                           (striptags arg!o)
                           (the ip))
-      (tab   
+      (tab
         (row "title"   (input "t" title 50))
         (row "text"    (textarea "x" 4 50 (only.pr text)))
         (row ""        "Use blank lines to separate choices:")
@@ -1701,17 +1699,17 @@ function vote(node) {
 
 (= fewopts* "A poll must have at least two options.")
 
-(def process-poll (user title text opts ip)
+(def process-poll (title text opts ip)
   (if (or (blank title) (blank opts))
-       (flink [newpoll-page user title text opts retry*])
+       (flink [newpoll-page title text opts retry*])
       (len> title title-limit*)
-       (flink [newpoll-page user title text opts toolong*])
+       (flink [newpoll-page title text opts toolong*])
       (len< (paras opts) 2)
-       (flink [newpoll-page user title text opts fewopts*])
-      (atlet p (create-poll (multisubst scrubrules* title) text opts user ip)
+       (flink [newpoll-page title text opts fewopts*])
+      (atlet p (create-poll (multisubst scrubrules* title) text opts (the me) ip)
         (ip-ban-test p ip)
-        (when (ignored user) (kill p 'ignored))
-        (submit-item user p)
+        (when (ignored (the me)) (kill p 'ignored))
+        (submit-item (the me) p)
         (maybe-ban-ip p)
         "newest")))
 
@@ -1734,17 +1732,17 @@ function vote(node) {
     (= (items* o!id) o) 
     o))
 
-(def add-pollopt-page (p user)
+(def add-pollopt-page (p)
   (minipage "Add Poll Choice"
-    (urform (do (add-pollopt (the me) p (striptags arg!x) (the ip))
+    (urform (do (add-pollopt p (striptags arg!x) (the ip))
                 (item-url p!id))
       (tab
         (row "text" (textarea "x" 4 50))
         (row ""     (submit))))))
 
-(def add-pollopt (user p text ip)
+(def add-pollopt (p text ip)
   (unless (blank text)
-    (atlet o (create-pollopt p nil nil text user ip)
+    (atlet o (create-pollopt p nil nil text (the me) ip)
       (++ p!parts (list o!id))
       (save-item p))))
 
@@ -2399,46 +2397,46 @@ first asterisk isn't whitespace.
 
 ; Reset PW
 
-(defopg resetpw (resetpw-page (the me)))
+(defopg resetpw (resetpw-page))
 
-(def resetpw-page (user (o msg))
+(def resetpw-page ((o msg))
   (minipage "Reset Password"
     (if msg
          (pr msg)
-        (blank (uvar user email))
+        (blank (uvar (the me) email))
          (do (pr "Before you do this, please add your email address to your ")
-             (underlink "profile" (user-url user))
-             (pr ". Otherwise you could lose your account if you mistype 
+             (underlink "profile" (user-url (the me)))
+             (pr ". Otherwise you could lose your account if you mistype
                   your new password.")))
     (br2)
-    (uform (try-resetpw (the me) arg!p)
+    (uform (try-resetpw arg!p)
       (single-input "New password: " 'p 20 "reset" t))))
 
-(def try-resetpw (user newpw)
+(def try-resetpw (newpw)
   (if (len< newpw 4)
-      (resetpw-page user "Passwords should be a least 4 characters long.  
-                          Please choose another.")
-      (do (set-pw user newpw)
-          (newspage user))))
+      (resetpw-page "Passwords should be a least 4 characters long.
+                     Please choose another.")
+      (do (set-pw (the me) newpw)
+          (newspage (the me)))))
 
 
 ; Scrubrules
 
 (defopa scrubrules
-  (scrub-page (the me) scrubrules*))
+  (scrub-page scrubrules*))
 
 ; If have other global alists, generalize an alist edit page.
 ; Or better still generalize vars-form.
 
-(def scrub-page (user rules (o msg nil))
+(def scrub-page (rules (o msg nil))
   (minipage "Scrubrules"
     (when msg (pr msg) (br2))
     (uform (with (froms (lines arg!from)
                   tos   (lines arg!to))
              (if (is (len froms) (len tos))
                  (do (todisk scrubrules* (map list froms tos))
-                     (scrub-page (the me) scrubrules* "Changes saved."))
-                 (scrub-page (the me) rules "To and from should be same length.")))
+                     (scrub-page scrubrules* "Changes saved."))
+                 (scrub-page rules "To and from should be same length.")))
       (pr "From: ")
       (tag (textarea name 'from 
                      cols (apply max 20 (map len (map car rules)))
