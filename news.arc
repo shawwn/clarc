@@ -115,7 +115,7 @@
 ;
 ; init-user sets (profs* u) and returns u (the username), not the
 ; profile, so we read it back from profs* after init.
-(def profile (u)
+(def profile ((t u me))
   (or (profs* u)
       (aand (goodname u)
             (or (and (file-exists (+ profdir* u))
@@ -124,7 +124,7 @@
                   (init-user u)
                   (profs* u))))))
 
-(def votes (u)
+(def votes ((t u me))
   (or (votes* u)
       (aand (file-exists (+ votedir* u))
             (= (votes* u) (load-table it)))))
@@ -144,9 +144,9 @@
 (def ensure-news-user ()
   (profile (me)))
 
-(def save-votes (u) (save-table (votes* u) (+ votedir* u)))
+(def save-votes ((t u me)) (save-table (votes* u) (+ votedir* u)))
 
-(def save-prof  (u) (save-table (profs* u) (+ profdir* u)))
+(def save-prof  ((t u me)) (save-table (profs* u) (+ profdir* u)))
 
 (mac uvar (u k) `((profile ,u) ',k))
 
@@ -162,7 +162,7 @@
 (def users ((o f idfn)) 
   (keep f (keys profs*)))
 
-(def check-key (u k)
+(def check-key (k (t u me))
   (and u (mem k (uvar u keys))))
 
 (def author (i (t u me)) (is u i!by))
@@ -316,7 +316,7 @@
 
 (def item-age (i) (minutes-since i!time))
 
-(def user-age (u) (minutes-since (uvar u created)))
+(def user-age ((t u me)) (minutes-since (uvar u created)))
 
 ; Only looks at the 1000 most recent stories, which might one day be a 
 ; problem if there is massive spam. 
@@ -957,7 +957,7 @@ function vote(node) {
           rel 'nofollow)
     (pr "More")))
 
-(def display-story (i s whence (t user me))
+(def display-story (i s whence)
   (when (or (cansee s) (s 'kids))
     (tr (display-item-number i)
         (td (votelinks s whence))
@@ -981,7 +981,7 @@ function vote(node) {
 
 (= follow-threshold* 5)
 
-(def titleline (s url whence (t user me))
+(def titleline (s url whence)
   (tag (td class 'title)
     (if (cansee s)
         (do (deadmark s)
@@ -990,7 +990,7 @@ function vote(node) {
             (awhen (sitename url)
               (spanclass comhead
                 (pr " (" )
-                (if (admin user)
+                (if (admin)
                     (w/rlink (do (set-site-ban it
                                                (case (car (banned-sites* it))
                                                  nil    'ignore
@@ -1006,11 +1006,11 @@ function vote(node) {
                 (pr ") "))))
         (pr (pseudo-text s)))))
 
-(def titlelink (s url (t user me))
+(def titlelink (s url)
   (let toself (blank url)
     (tag (a href (if toself
                       (item-url s!id)
-                     (or (live s) (author s) (editor user))
+                     (or (live s) (author s) (editor))
                       url
                       nil)
             rel  (unless (or toself (> (realscore s) follow-threshold*))
@@ -1033,21 +1033,20 @@ function vote(node) {
 (def deadmark (i)
   (when (and i!dead (seesdead))
     (pr " [dead] "))
-  (when (and i!deleted (admin user))
+  (when (and i!deleted (admin))
     (pr " [deleted] ")))
 
 (= downvote-threshold* 200 downvote-time* 1440)
 
 (= votewid* 14)
       
-(def votelinks (i whence (o downtoo) (t user me))
+(def votelinks (i whence (o downtoo))
   (center
     (if (and (cansee i)
-             (or (no user)
-                 (no ((votes user) i!id))))
+             (~and (me) ((votes) i!id)))
          (do (votelink i whence 'up)
              (if (and downtoo
-                      (or (admin user)
+                      (or (admin)
                           (< (item-age i) downvote-time*))
                       (canvote i 'down))
                  (do (br)
@@ -1066,18 +1065,18 @@ function vote(node) {
 
 ; redefined later (identically) so the outs catch new vals of up-url, etc.
 
-(def votelink (i whence dir (t user me))
-  (tag (a id      (if user (string dir '_ i!id))
-          onclick (if user "return vote(this)")
+(def votelink (i whence dir)
+  (tag (a id      (if (me) (string dir '_ i!id))
+          onclick (if (me) "return vote(this)")
           href    (vote-url i dir whence))
     (if (is dir 'up)
         (out (gentag img src up-url*   border 0 vspace 3 hspace 2))
         (out (gentag img src down-url* border 0 vspace 3 hspace 2)))))
 
-(def vote-url (i dir whence (t user me))
+(def vote-url (i dir whence)
   (+ "vote?" "for=" i!id
              "&dir=" dir
-             (if user (+ "&by=" user "&auth=" (user->cookie* user)))
+             (aif (me) (+ "&by=" it "&auth=" (user->cookie* it)))
              "&whence=" (urlencode whence)))
 
 (= lowest-score* -4)
@@ -1085,15 +1084,15 @@ function vote(node) {
 ; Not much stricter than whether to generate the arrow.  Further tests 
 ; applied in vote-for.
 
-(def canvote (i dir (t user me))
-  (and user
+(def canvote (i dir)
+  (and (me)
        (news-type&live i)
        (or (is dir 'up) (> i!score lowest-score*))
-       (no ((votes user) i!id))
+       (no ((votes) i!id))
        (or (is dir 'up)
            (and (acomment i)
-                (> (karma user) downvote-threshold*)
-                (no (aand i!parent (author (item it) user)))))))
+                (> (karma) downvote-threshold*)
+                (no (aand i!parent (author (item it))))))))
 
 ; Need the by argument or someone could trick logged in users into 
 ; voting something up by clicking on a link.  But a bad guy doesn't 
@@ -1213,28 +1212,28 @@ function vote(node) {
 ; Un-flagging something doesn't unkill it, if it's now no longer
 ; over flag-kill-threshold.  Ok, since arbitrary threshold anyway.
 
-(def flaglink (i whence (t user me))
-  (when (and user
-             (isnt user i!by)
-             (or (admin user) (> (karma user) flag-threshold*)))
+(def flaglink (i whence)
+  (when (and (me)
+             (~me i!by)
+             (or (admin) (> (karma) flag-threshold*)))
     (pr bar*)
-    (w/rlink (do (togglemem user i!flags)
+    (w/rlink (do (togglemem (me) i!flags)
                  (when (and (~mem 'nokill i!keys)
                             (len> i!flags flag-kill-threshold*)
                             (< (realscore i) 10)
                             (~find admin:!2 i!vote))
                    (kill i 'flags))
                  whence)
-      (pr "@(if (mem user i!flags) 'un)flag"))
-    (when (and (admin user) (len> i!flags many-flags*))
+      (pr "@(if (mem (me) i!flags) 'un)flag"))
+    (when (and (admin) (len> i!flags many-flags*))
       (pr bar* (plural (len i!flags) "flag") " ")
       (w/rlink (do (togglemem 'nokill i!keys)
                    (save-item i)
                    whence)
         (pr (if (mem 'nokill i!keys) "un-notice" "noted"))))))
 
-(def killlink (i whence (t user me))
-  (when (admin user)
+(def killlink (i whence)
+  (when (admin)
     (pr bar*)
     (w/rlink (do (zap no i!dead)
                  (if i!dead
@@ -1249,8 +1248,8 @@ function vote(node) {
 ; site, so that all future submitters will be ignored.  Does not ban 
 ; the ip address, but that will eventually get banned by maybe-ban-ip.
 
-(def blastlink (i whence (o nuke) (t user me))
-  (when (and (admin user) 
+(def blastlink (i whence (o nuke))
+  (when (and (admin) 
              (or (no nuke) (~empty i!url)))
     (pr bar*)
     (w/rlink (do (toggle-blast i nuke)
@@ -1327,11 +1326,11 @@ function vote(node) {
 
 (= legit-threshold* 0 new-age-threshold* 0 new-karma-threshold* 2)
 
-(def legit-user (user) 
+(def legit-user ((t user me))
   (or (editor user)
       (> (karma user) legit-threshold*)))
 
-(def possible-sockpuppet (user)
+(def possible-sockpuppet ((t user me))
   (or (ignored user)
       (< (uvar user weight) .5)
       (and (< (user-age user) new-age-threshold*)
@@ -1345,43 +1344,43 @@ function vote(node) {
 ; big enough problem to drag in locking.
 
 (def vote-for (i (o dir 'up) (t user me))
-  (unless (or ((votes user) i!id) 
-              (and (~live i) (isnt user i!by)))
-    (withs (ip   (logins* user)
-            vote (list (seconds) ip user dir i!score))
-      (unless (or (and (or (ignored user) (check-key user 'novote))
-                       (isnt user i!by))
+  (unless (or ((votes) i!id) 
+              (and (~live i) (~me i!by)))
+    (withs (ip   (logins* (me))
+            vote (list (seconds) ip (me) dir i!score))
+      (unless (or (and (or (ignored) check-key!novote)
+                       (~me i!by))
                   (and (is dir 'down)
-                       (~editor user)
-                       (or (check-key user 'nodowns)
-                           (> (downvote-ratio user) downvote-ratio-limit*)
+                       (~editor)
+                       (or check-key!nodowns
+                           (> (downvote-ratio) downvote-ratio-limit*)
                            ; prevention of karma-bombing
-                           (just-downvoted user i!by)))
-                  (and (~legit-user user)
-                       (isnt user i!by)
+                           (just-downvoted i!by)))
+                  (and (~legit-user)
+                       (~me i!by)
                        (find [is (cadr _) ip] i!votes))
                   (and (isnt i!type 'pollopt)
                        (biased-voter i vote)))
         (++ i!score (case dir up 1 down -1))
         ; canvote protects against sockpuppet downvote of comments 
-        (when (and (is dir 'up) (possible-sockpuppet user))
+        (when (and (is dir 'up) (possible-sockpuppet))
           (++ i!sockvotes))
         (metastory&adjust-rank i)
-        (unless (or (author i user)
-                    (and (is ip i!ip) (~editor user))
+        (unless (or (author i)
+                    (and (is ip i!ip) (~editor))
                     (is i!type 'pollopt))
           (++ (karma i!by) (case dir up 1 down -1))
           (save-prof i!by))
         (wipe (comment-cache* i!id)))
-      (if (admin user) (pushnew 'nokill i!keys))
+      (if (admin) (pushnew 'nokill i!keys))
       (push vote i!votes)
       (save-item i)
       (push (list (seconds) i!id i!by (sitename i!url) dir)
-            (uvar user votes))
-      (= ((votes* user) i!id) vote)
-      (save-votes user)
-      (zap [firstn votewindow* _] (uvar user votes))
-      (save-prof user)
+            (uvar (me) votes))
+      (= ((votes* (me)) i!id) vote)
+      (save-votes)
+      (zap [firstn votewindow* _] (uvar (me) votes))
+      (save-prof)
       (push (cons i!id vote) recent-votes*))))
 
 ; redefined later
@@ -1390,14 +1389,14 @@ function vote(node) {
 
 ; ugly to access vote fields by position number
 
-(def downvote-ratio (user (o sample 20))
+(def downvote-ratio ((o sample 20))
   (ratio [is _.1.3 'down]
          (keep [let by ((item (car _)) 'by)
-                 (nor (is by user) (ignored by))]
-               (bestn sample (compare > car:cadr) (tablist (votes user))))))
+                 (nor (me by) (ignored by))]
+               (bestn sample (compare > car:cadr) (tablist (votes))))))
 
-(def just-downvoted (user victim (o n 3))
-  (let prev (firstn n (recent-votes-by user))
+(def just-downvoted (victim (o n 3))
+  (let prev (firstn n (recent-votes-by))
     (and (is (len prev) n)
          (all (fn ((id sec ip voter dir score))
                 (and (author (item id) victim) (is dir 'down)))
@@ -1407,7 +1406,7 @@ function vote(node) {
 ; template.  They're stored slightly differently in two diff places: 
 ; in one with the voter in the car and the other without.
 
-(def recent-votes-by (user)
+(def recent-votes-by ((t user me))
   (keep [is _.3 user] recent-votes*))
 
 
@@ -1519,16 +1518,16 @@ function vote(node) {
 ; New user can't submit more than 2 stories in a 2 hour period.
 ; Give overeager users the key toofast to make limit permanent.
 
-(def oversubmitting (kind (o url) (t user me))
+(def oversubmitting (kind (o url))
   (and enforce-oversubmit*
-       (or (check-key user 'toofast)
-           (ignored user)
-           (< (user-age user) new-age-threshold*)
-           (< (karma user) new-karma-threshold*))
+       (or check-key!toofast
+           (ignored)
+           (< (user-age) new-age-threshold*)
+           (< (karma) new-karma-threshold*))
        (len> (recent-items [or (author _) (is _!ip (ip))] 180)
              (if (is kind 'story)
-                 (if (bad-user user) 0 1)
-                 (if (bad-user user) 1 10)))))
+                 (if (bad-user) 0 1)
+                 (if (bad-user) 1 10)))))
 
 ; Note that by deliberate tricks, someone could submit a story with a 
 ; blank title.
@@ -1994,7 +1993,7 @@ function vote(node) {
          (submit-item c)
          whence)))
 
-(def bad-user (u)
+(def bad-user ((t u me))
   (or (ignored u) (< (karma u) comment-threshold*)))
 
 (def create-comment (parent text)
