@@ -1624,13 +1624,13 @@ function vote(node) {
   (ip-ban-test i)
   (hook 'story-ban-test i url))
 
-(def site-ban-test (i url (t user me))
+(def site-ban-test (i url)
   (whenlet ban (banned-sites* (sitename url))
-    (if (caris ban 'ignore) (ignore user 'site-ban nil))
+    (if (caris ban 'ignore) (ignore (me) 'site-ban nil))
     (kill i 'site-ban)))
 
-(def ip-ban-test (i (t ip))
-  (if (banned-ips* ip) (kill i 'banned-ip)))
+(def ip-ban-test (i)
+  (if (banned-ips* (ip)) (kill i 'banned-ip)))
 
 (def comment-ban-test (i string kill-list ignore-list (t user me))
   (when (some [posmatch _ string] ignore-list)
