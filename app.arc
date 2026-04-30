@@ -27,13 +27,25 @@
 
 (= cookie->user* (table) user->cookie* (table) logins* (table))
 
-(def get-user (req) 
+(def get-user (req)
   (let u (aand (alref req!cooks "user") (cookie->user* (sym it)))
     (when u (= (logins* u) req!ip))
     u))
 
+; (me)        --- read the current request's user
+; (me other)  --- the current user, only if it equals other
+;
+; Doubles as predicate-and-value: (when (me other) ...) runs the body
+; only when the viewer is `other`, and inside `it` is the username.
+(def me ((o other))
+  (let m (the me)
+    (if other (and (is m other) m) m)))
+
+(mac w/me (val . body)
+  `(w/the me ,val ,@body))
+
 (mac when-umatch (user . body)
-  `(if (is ,user (the me))
+  `(if (me ,user)
        (do ,@body)
        (mismatch-message)))
 
@@ -41,7 +53,7 @@
   (prn "Dead link: users don't match."))
 
 (mac when-umatch/r (user . body)
-  `(if (is ,user (the me))
+  `(if (me ,user)
        (do ,@body)
        "mismatch"))
 
@@ -49,12 +61,12 @@
 
 (mac uform (after . body)
   (w/uniq g
-    `(let ,g (the me)
+    `(let ,g (me)
        (aform (when-umatch ,g ,after) ,@body))))
 
 (mac urform (after . body)
   (w/uniq g
-    `(let ,g (the me)
+    `(let ,g (me)
        (arform (when-umatch/r ,g ,after) ,@body))))
 
 ; Like onlink, but checks that user submitting the request is the
@@ -78,7 +90,7 @@
 (def user-exists (u) (and u (hpasswords* u) u))
 
 (def admin-page msg
-  (let user (the me)
+  (let user (me)
     (whitepage
       (prbold "Admin: ")
       (hspace 20)
@@ -250,13 +262,13 @@
        str))
 
 (defop logout
-  (aif (the me)
+  (aif (me)
        (do (logout-user it)
            (pr "Logged out."))
        (pr "You were not logged in.")))
 
 (defop whoami
-  (aif (the me)
+  (aif (me)
        (prs it 'at (the ip))
        (do (pr "You are not logged in. ")
            (w/link (login-page 'both) (pr "Log in"))
@@ -393,7 +405,7 @@
   ; Capture (the me) at form-generation time so the submit-side
   ; when-umatch can verify the submitter is the same user who
   ; received the form.
-  (let user (the me)
+  (let user (me)
     (taform lasts
             (if (all [no (_ 4)] fields)
                 nil
@@ -662,7 +674,7 @@
 
 (mac defopl (name . body)
   `(defop ,name
-     (if (the me)
+     (if (me)
          (do ,@body)
          (login-page 'both
                      "You need to be logged in to do that."

@@ -532,7 +532,7 @@ Connection: close"))
 (defop || (pr "It's alive."))
 
 (defop topips
-  (when (admin (the me))
+  (when (admin)
     (whitepage
       (sptab
         (each ip (let leaders nil
@@ -547,7 +547,7 @@ Connection: close"))
             (row ip n (pr (num (* 100 (/ n requests*)) 1)))))))))
 
 (defop spurned
-  (when (admin (the me))
+  (when (admin)
     (whitepage
       (sptab
         (map (fn ((ip n)) (row ip n))

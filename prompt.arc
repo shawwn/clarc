@@ -3,12 +3,12 @@
 (= appdir* "arc/apps/")
 
 (defop prompt
-  (if (admin (the me))
+  (if (admin)
       (prompt-page)
       (pr "Sorry.")))
 
 (def prompt-page msg
-  (let user (the me)
+  (let user (me)
     (ensure-dir appdir*)
     (ensure-dir (string appdir* user))
     (whitepage
@@ -56,12 +56,12 @@
   (whitepage
     (pr "user: " me " app: " app)
     (br2)
-    (aform (if (is (the me) me)
+    (aform (if (me me)
                (do (when (is arg!cmd "save")
                      (write-app me app (readall arg!exprs)))
                    (prompt-page))
                (login-page 'both nil
-                           (fn (u ip) (w/me u (prompt-page)))))
+                           (fn () (prompt-page))))
       (textarea "exprs" 10 82
         (pprcode (read-app me app)))
       (br2)

@@ -142,7 +142,7 @@
 ; news app need to call this in the after-login fn.
 
 (def ensure-news-user ()
-  (let u (the me)
+  (let u (me)
     (if (profile u) u (init-user u))))
 
 (def save-votes (u) (save-table (votes* u) (+ votedir* u)))
@@ -258,7 +258,7 @@
 
 (= kill-log* nil)
 
-(def log-kill (i (o how (the me)))
+(def log-kill (i (t how me))
   (push (list i!id how) kill-log*))
 
 (mac each-loaded-item (var . body)
@@ -654,7 +654,7 @@ function vote(node) {
 
 (mac defopt (name test msg . body)
   `(defop ,name
-     (if (,test (the me))
+     (if (,test (me))
          (do ,@body)
          (login-page 'both (+ "Please log in" ,msg ".")
                      (list (fn () (ensure-news-user))
@@ -766,14 +766,13 @@ function vote(node) {
 (= topcolor-threshold* 250)
 
 (def user-fields (user)
-  (let me (the me)
-    (withs (e (editor)
-            a (admin)
-            w (is me user)
-            k (and w (> (karma me) topcolor-threshold*))
-            u (or a w)
-            m (or a (and (member) w))
-            p (profile user))
+  (withs (e (editor)
+          a (admin)
+          w (me user)
+          k (and w (> (karma w) topcolor-threshold*))
+          u (or a w)
+          m (or a (and (member) w))
+          p (profile user))
     `((string  user       ,user                                     t   nil)
       (string  name       ,(p 'name)                               ,m  ,m)
       (string  created    ,(text-age:user-age user)                 t   nil)
@@ -795,10 +794,10 @@ function vote(node) {
       (posint  minaway    ,(p 'minaway)                            ,u  ,u)
       (sexpr   keys       ,(p 'keys)                               ,a  ,a)
       (hexcol  topcolor   ,(or (p 'topcolor) (hexrep site-color*)) ,k  ,k)
-      (int     delay      ,(p 'delay)                              ,u  ,u)))))
+      (int     delay      ,(p 'delay)                              ,u  ,u))))
 
 (def saved-link (user)
-  (when (or (admin) (is (the me) user))
+  (when (or (admin) (me user))
     (let n (if (len> (votes user) 500)
                "many"
                (len (voted-stories user)))
@@ -916,7 +915,7 @@ function vote(node) {
       (pr "No such user.")))
 
 (def savedpage (user)
-  (if (or (is (the me) user) (admin))
+  (if (or (me user) (admin))
       (listpage (msec)
                 (sort (compare < item-age) (voted-stories user))
                "saved" "Saved Links" (saved-url user))
@@ -1482,7 +1481,7 @@ function vote(node) {
   (aif (and (~blank url) (live-story-w/url url))
        (do (vote-for it)
            (item-url it!id))
-       (if (no (the me))
+       (if (no (me))
             (flink [submit-login-warning url title showtext text])
            (no (and (or (blank url) (valid-url url))
                     (~blank title)))
@@ -1498,7 +1497,7 @@ function vote(node) {
             (flink [msgpage toofast*])
            (let s (create-story url (process-title title) text)
              (story-ban-test s url)
-             (when (ignored (the me)) (kill s 'ignored))
+             (when (ignored (me)) (kill s 'ignored))
              (submit-item s)
              (maybe-ban-ip s)
              "newest"))))
@@ -1634,7 +1633,7 @@ function vote(node) {
     (if (caris ban 'ignore) (ignore user 'site-ban nil))
     (kill i 'site-ban)))
 
-(def ip-ban-test (i (o ip (the ip)))
+(def ip-ban-test (i (t ip))
   (if (banned-ips* ip) (kill i 'banned-ip)))
 
 (def comment-ban-test (i string kill-list ignore-list (t user me))
@@ -1705,7 +1704,7 @@ function vote(node) {
        (flink [newpoll-page title text opts fewopts*])
       (atlet p (create-poll (multisubst scrubrules* title) text opts)
         (ip-ban-test p)
-        (when (ignored (the me)) (kill p 'ignored))
+        (when (ignored (me)) (kill p 'ignored))
         (submit-item p)
         (maybe-ban-ip p)
         "newest")))
@@ -2168,7 +2167,7 @@ function vote(node) {
 (def threads-page (user)
   (if (profile user)
       (withs (title (+ user "'s comments")
-              label (if (is (the me) user) "threads" title)
+              label (if (me user) "threads" title)
               here  (threads-url user))
         (longpage (msec) nil label title here
           (awhen (keep [and (cansee _) (~subcomment _)]
@@ -2215,18 +2214,17 @@ function vote(node) {
       (pr "No user specified.")))
 
 (def submitted-page (user)
-  (let me (the me)
-    (if (profile user)
-        (with (label (+ user "'s submissions")
-               here  (submitted-url user))
-          (longpage (msec) nil label label here
-            (if (or (no (ignored user))
-                    (is me user)
-                    (seesdead me))
-                (aif (keep [and (metastory _) (cansee _)]
-                           (submissions user))
-                     (display-items it label label here 0 perpage* t)))))
-        (pr "No such user."))))
+  (if (profile user)
+      (with (label (+ user "'s submissions")
+             here  (submitted-url user))
+        (longpage (msec) nil label label here
+          (if (or (no (ignored user))
+                  (me user)
+                  (seesdead))
+              (aif (keep [and (metastory _) (cansee _)]
+                         (submissions user))
+                   (display-items it label label here 0 perpage* t)))))
+      (pr "No such user.")))
 
 
 ; RSS
@@ -2402,9 +2400,9 @@ first asterisk isn't whitespace.
   (minipage "Reset Password"
     (if msg
          (pr msg)
-        (blank (uvar (the me) email))
+        (blank (uvar (me) email))
          (do (pr "Before you do this, please add your email address to your ")
-             (underlink "profile" (user-url (the me)))
+             (underlink "profile" (user-url (me)))
              (pr ". Otherwise you could lose your account if you mistype
                   your new password.")))
     (br2)
@@ -2415,7 +2413,7 @@ first asterisk isn't whitespace.
   (if (len< newpw 4)
       (resetpw-page "Passwords should be a least 4 characters long.
                      Please choose another.")
-      (do (set-pw (the me) newpw)
+      (do (set-pw (me) newpw)
           (newspage))))
 
 

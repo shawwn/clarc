@@ -44,9 +44,9 @@
 
 (def post-page (p) (blogpage (display-post p)))
 
-(def display-post (p (t me))
+(def display-post (p)
   (tag b (link p!title (permalink p)))
-  (when me
+  (when (me)
     (sp)
     (link "[edit]" (string "editpost?id=" p!id)))
   (br2)

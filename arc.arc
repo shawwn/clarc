@@ -1666,7 +1666,6 @@
 ;   (the var)          --- read the current thread's binding for var
 ;   (= (the var) val)  --- set it
 ;   (w/the var val ...) --- bind for the duration of body, restore after
-;   (w/me val ...)     --- shorthand for (w/the me val ...)
 ;
 ;   (def f ((t me)) ...)        --- me defaults to (the me) if not passed
 ;   (def f ((t local var)) ...) --- local defaults to (the var)
@@ -1703,9 +1702,6 @@
        (= (the ,var) ,val)
        (after (do ,@body)
          (= (the ,var) ,prev)))))
-
-(mac w/me (val . body)
-  `(w/the me ,val ,@body))
 
 
 ; any logical reason I can't say (push x (if foo y z)) ?
