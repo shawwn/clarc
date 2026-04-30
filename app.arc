@@ -85,7 +85,6 @@
     `(let ,g (me)
       (rlinkf ,text (when-umatch/r ,g ,@body)))))
 
-
 (defop admin (admin-gate))
 
 (def admin-gate ()

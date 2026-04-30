@@ -658,8 +658,8 @@ function vote(node) {
                      (list (fn () (ensure-news-user))
                            (string ',name (reassemble-args (the req))))))))
 
-(mac defopg (name . body) `(defopt ,name idfn ""                   ,@body))
-(mac defope (name . body) `(defopt ,name editor " as an editor"    ,@body))
+(mac defopg (name . body) `(defopt ,name idfn   ""                     ,@body))
+(mac defope (name . body) `(defopt ,name editor " as an editor"        ,@body))
 (mac defopa (name . body) `(defopt ,name admin  " as an administrator" ,@body))
 
 (mac opexpand (definer name parms . body)
@@ -740,16 +740,15 @@ function vote(node) {
       (pr "No such user.")))
 
 (def user-page (user)
-  (let here (user-url user)
-    (shortpage nil nil (+ "Profile: " user) here
-      (profile-form user)
-      (br2)
-      (when (some astory:item (uvar user submitted))
-        (underlink "submissions" (submitted-url user)))
-      (when (some acomment:item (uvar user submitted))
-        (sp)
-        (underlink "comments" (threads-url user)))
-      (hook 'user user))))
+  (shortpage nil nil (+ "Profile: " user) (user-url user)
+    (profile-form user)
+    (br2)
+    (when (some astory:item (uvar user submitted))
+      (underlink "submissions" (submitted-url user)))
+    (when (some acomment:item (uvar user submitted))
+      (sp)
+      (underlink "comments" (threads-url user)))
+    (hook 'user user)))
 
 (def profile-form (user)
   (let prof (profile user)
@@ -767,7 +766,7 @@ function vote(node) {
   (withs (e (editor)
           a (admin)
           w (me user)
-          k (and w (> (karma w) topcolor-threshold*))
+          k (and w (> (karma user) topcolor-threshold*))
           u (or a w)
           m (or a (and (member) w))
           p (profile user))
@@ -820,13 +819,13 @@ function vote(node) {
 ; To allow other arguments, would have to turn the cache from a single 
 ; stored value to a hash table whose keys were lists of arguments.
 
-(mac newscache (name user time . body)
+(mac newscache (name time . body)
   (w/uniq gc
     `(let ,gc (cache (fn () (* caching* ,time))
-                     (fn () (tostring (let ,user nil (w/me ,user ,@body)))))
-       (def ,name ((t ,user me))
-         (if ,user
-             (w/me ,user ,@body)
+                     (fn () (tostring (w/me nil ,@body))))
+       (def ,name ()
+         (if (me)
+             (do ,@body)
              (pr (,gc)))))))
 
 
@@ -836,7 +835,7 @@ function vote(node) {
 
 ;(newsop index.html () (newspage))
 
-(newscache newspage user 90
+(newscache newspage 90
   (listpage (msec) (topstories maxend*) nil nil "news"))
 
 (def listpage (t1 items label title (o url label) (o number t))
@@ -850,7 +849,7 @@ function vote(node) {
 ; Note: dead/deleted items will persist for the remaining life of the 
 ; cached page.  If this were a prob, could make deletion clear caches.
 
-(newscache newestpage user 40
+(newscache newestpage 40
   (listpage (msec) (newstories maxend*) "new" "New Links" "newest"))
 
 (def newstories (n)
@@ -859,7 +858,7 @@ function vote(node) {
 
 (newsop best () (bestpage))
 
-(newscache bestpage user 1000
+(newscache bestpage 1000
   (listpage (msec) (beststories maxend*) "best" "Top Links"))
 
 ; As no of stories gets huge, could test visibility in fn sent to best.
@@ -883,7 +882,7 @@ function vote(node) {
 
 (newsop bestcomments () (bestcpage))
 
-(newscache bestcpage user 1000
+(newscache bestcpage 1000
   (listpage (msec) (bestcomments maxend*) 
             "best comments" "Best Comments" "bestcomments" nil))
 
@@ -899,7 +898,7 @@ function vote(node) {
       (row (link "bestcomments") "Highest voted recent comments.")
       (row (link "noobstories")  "Submissions from new accounts.")
       (row (link "noobcomments") "Comments from new accounts.")
-      (when (admin user)
+      (when (admin)
         (map row:link
              '(optimes topips flagged killed badguys badlogins goodlogins)))
       (hook 'listspage))))
@@ -2227,9 +2226,9 @@ function vote(node) {
 
 ; RSS
 
-(newsop rss () (rsspage nil))
+(newsop rss () (w/me nil (rsspage)))
 
-(newscache rsspage user 90 
+(newscache rsspage 90 
   (rss-stories (retrieve perpage* live ranked-stories*)))
 
 (def rss-stories (stories)
@@ -2254,7 +2253,7 @@ function vote(node) {
 
 (= nleaders* 20)
 
-(newscache leaderspage user 1000
+(newscache leaderspage 1000
   (longpage (msec) nil "leaders" "Leaders" "leaders"
     (sptab
       (let i 0
@@ -2262,7 +2261,7 @@ function vote(node) {
           (tr (tdr:pr (++ i) ".")
               (td (userlink u nil))
               (tdr:pr (karma u))
-              (when (admin user)
+              (when (admin)
                 (tdr:prt (only.num (uvar u avg) 2 t t))))
           (if (is i 10) (spacerow 30)))))))
 
@@ -2310,7 +2309,7 @@ function vote(node) {
 
 (newsop active () (active-page))
 
-(newscache active-page user 600
+(newscache active-page 600
   (listpage (msec) (actives) "active" "Active Threads"))
 
 (def actives ((o n maxend*) (o consider 2000))
@@ -2327,7 +2326,7 @@ function vote(node) {
 
 (newsop newcomments () (newcomments-page))
 
-(newscache newcomments-page user 60
+(newscache newcomments-page 60
   (listpage (msec) (visible (firstn maxend* comments*))
             "comments" "New Comments" "newcomments" nil))
 
