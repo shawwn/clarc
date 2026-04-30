@@ -459,32 +459,32 @@ Connection: close"))
 
 ; The aform / arform / taform / tarform / aformh / arformh macros
 ; take a HANDLER expression as their first argument (not a function
-; value). The macro wraps it in a one-arg fn for the fnid contract,
+; value). The macro wraps it in a thunk for the fnid contract,
 ; but callers don't have to. The handler reads its own context
 ; through (the req), (the me), arg!key etc.
 
 (mac aform (handler . body)
   `(tag (form method 'post action fnurl*)
-     (fnid-field (fnid (fn (req) (prn) ,handler)))
+     (fnid-field (fnid (fn () (prn) ,handler)))
      ,@body))
 
 (mac arform (handler . body)
   `(tag (form method 'post action rfnurl*)
-     (fnid-field (fnid (fn (req) ,handler)))
+     (fnid-field (fnid (fn () ,handler)))
      ,@body))
 
 ; aform / arform variants with a fnid lifetime in seconds.
 
 (mac taform (lasts handler . body)
   (w/uniq gh
-    `(let ,gh (fn (req) (prn) ,handler)
+    `(let ,gh (fn () (prn) ,handler)
        (tag (form method 'post action fnurl*)
          (fnid-field (if ,lasts (timed-fnid ,lasts ,gh) (fnid ,gh)))
          ,@body))))
 
 (mac tarform (lasts handler . body)
   (w/uniq gh
-    `(let ,gh (fn (req) ,handler)
+    `(let ,gh (fn () ,handler)
        (tag (form method 'post action rfnurl*)
          (fnid-field (if ,lasts (timed-fnid ,lasts ,gh) (fnid ,gh)))
          ,@body))))
@@ -494,12 +494,12 @@ Connection: close"))
 
 (mac aformh (handler . body)
   `(tag (form method 'post action fnurl*)
-     (fnid-field (fnid (fn (req) ,handler)))
+     (fnid-field (fnid (fn () ,handler)))
      ,@body))
 
 (mac arformh (handler . body)
   `(tag (form method 'post action rfnurl2*)
-     (fnid-field (fnid (fn (req) ,handler)))
+     (fnid-field (fnid (fn () ,handler)))
      ,@body))
 
 ; only unique per server invocation
