@@ -1980,8 +1980,8 @@ function vote(node) {
 ; instead of just "a\nb".   Maybe should just remove returns from
 ; the vals coming in from any form, e.g. in aform.
 
-(def process-comment (parent text whence (t user me))
-  (if (no user)
+(def process-comment (parent text whence)
+  (if (~me)
        (flink [comment-login-warning parent whence text])
       (empty text)
        (flink [addcomment-page parent whence text retry*])
@@ -1989,7 +1989,7 @@ function vote(node) {
        (flink [msgpage toofast*])
        (atlet c (create-comment parent (md-from-form text))
          (comment-ban-test c text comment-kill* comment-ignore*)
-         (if (bad-user user) (kill c 'ignored/karma))
+         (if (bad-user) (kill c 'ignored/karma))
          (submit-item c)
          whence)))
 
