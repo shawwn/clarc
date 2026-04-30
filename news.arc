@@ -393,10 +393,10 @@
       (some [cansee-descendant user (item _)] 
             c!kids)))
   
-(def editor (u) 
+(def editor ((t u me))
   (and u (or (admin u) (> (uvar u auth) 0))))
 
-(def member (u) 
+(def member ((t u me))
   (and u (or (admin u) (uvar u member))))
 
 
@@ -630,7 +630,7 @@ function vote(node) {
 
 (def topright (user whence (o showkarma t))
   (when user 
-    (userlink user user nil)
+    (userlink user nil)
     (when showkarma (pr  "&nbsp;(@(karma user))"))
     (pr "&nbsp;|&nbsp;"))
   (if user
@@ -645,7 +645,7 @@ function vote(node) {
                             (newslog ip u 'top-login))
                           whence)))))
 
-(def noob (user)
+(def noob ((t user me))
   (and user (< (days-since (uvar user created)) 1)))
 
 
@@ -722,11 +722,11 @@ function vote(node) {
                (fn () (newsadmin-page user)))
 
     (br2)
-    (aform (with (user (the me) subject arg!id)
+    (aform (let subject arg!id
              (if (profile subject)
                  (do (killallby subject)
-                     (submitted-page user subject))
-                 (admin&newsadmin-page user)))
+                     (submitted-page subject))
+                 (admin&newsadmin-page (the me))))
       (single-input "" 'id 20 "kill all by"))
     (br2)
     (aform (let user (the me)
@@ -739,46 +739,47 @@ function vote(node) {
 
 (newsop user (id)
   (if (only.profile id)
-      (user-page user id)
+      (user-page id)
       (pr "No such user.")))
 
-(def user-page (user subject)
-  (let here (user-url subject)
-    (shortpage user nil nil (+ "Profile: " subject) here
-      (profile-form user subject)
+(def user-page (user)
+  (let here (user-url user)
+    (shortpage (the me) nil nil (+ "Profile: " user) here
+      (profile-form user)
       (br2)
-      (when (some astory:item (uvar subject submitted))
-        (underlink "submissions" (submitted-url subject)))
-      (when (some acomment:item (uvar subject submitted))
+      (when (some astory:item (uvar user submitted))
+        (underlink "submissions" (submitted-url user)))
+      (when (some acomment:item (uvar user submitted))
         (sp)
-        (underlink "comments" (threads-url subject)))
-      (hook 'user user subject))))
+        (underlink "comments" (threads-url user)))
+      (hook 'user (the me) user))))
 
-(def profile-form (user subject)
-  (let prof (profile subject) 
-    (vars-form (user-fields user subject)
+(def profile-form (user)
+  (let prof (profile user)
+    (vars-form (user-fields user)
                (fn (name val)
                  (when (and (is name 'ignore) val (no prof!ignore))
-                   (log-ignore user subject 'profile))
+                   (log-ignore (the me) user 'profile))
                  (= (prof name) val))
-               (fn () (save-prof subject)
-                      (user-page user subject)))))
+               (fn () (save-prof user)
+                      (user-page user)))))
 
 (= topcolor-threshold* 250)
 
-(def user-fields (user subject)
-  (withs (e (editor user) 
-          a (admin user) 
-          w (is user subject)
-          k (and w (> (karma user) topcolor-threshold*))
-          u (or a w)
-          m (or a (and (member user) w))
-          p (profile subject))
-    `((string  user       ,subject                                  t   nil)
+(def user-fields (user)
+  (let me (the me)
+    (withs (e (editor)
+            a (admin)
+            w (is me user)
+            k (and w (> (karma me) topcolor-threshold*))
+            u (or a w)
+            m (or a (and (member) w))
+            p (profile user))
+    `((string  user       ,user                                     t   nil)
       (string  name       ,(p 'name)                               ,m  ,m)
-      (string  created    ,(text-age:user-age subject)              t   nil)
+      (string  created    ,(text-age:user-age user)                 t   nil)
       (string  password   ,(resetpw-link)                          ,w   nil)
-      (string  saved      ,(saved-link user subject)               ,u   nil)
+      (string  saved      ,(saved-link user)                       ,u   nil)
       (int     auth       ,(p 'auth)                               ,e  ,a)
       (yesno   member     ,(p 'member)                             ,a  ,a)
       (posint  karma      ,(p 'karma)                               t  ,a)
@@ -795,16 +796,16 @@ function vote(node) {
       (posint  minaway    ,(p 'minaway)                            ,u  ,u)
       (sexpr   keys       ,(p 'keys)                               ,a  ,a)
       (hexcol  topcolor   ,(or (p 'topcolor) (hexrep site-color*)) ,k  ,k)
-      (int     delay      ,(p 'delay)                              ,u  ,u))))
+      (int     delay      ,(p 'delay)                              ,u  ,u)))))
 
-(def saved-link (user subject)
-  (when (or (admin user) (is user subject))
-    (let n (if (len> (votes subject) 500) 
-               "many" 
-               (len (voted-stories user subject)))
+(def saved-link (user)
+  (when (or (admin) (is (the me) user))
+    (let n (if (len> (votes user) 500)
+               "many"
+               (len (voted-stories user)))
       (if (is n 0)
           ""
-          (tostring (underlink n (saved-url subject)))))))
+          (tostring (underlink n (saved-url user)))))))
 
 (def resetpw-link ()
   (tostring (underlink "reset password" "resetpw")))
@@ -912,19 +913,19 @@ function vote(node) {
 
 (newsop saved (id) 
   (if (only.profile id)
-      (savedpage user id) 
+      (savedpage id)
       (pr "No such user.")))
 
-(def savedpage (user subject)
-  (if (or (is user subject) (admin user))
-      (listpage user (msec)
-                (sort (compare < item-age) (voted-stories user subject)) 
-               "saved" "Saved Links" (saved-url subject))
+(def savedpage (user)
+  (if (or (is (the me) user) (admin))
+      (listpage (the me) (msec)
+                (sort (compare < item-age) (voted-stories user))
+               "saved" "Saved Links" (saved-url user))
       (pr "Can't display that.")))
 
-(def voted-stories (user subject)
-  (keep [and (astory _) (cansee user _)]
-        (map item (keys:votes subject))))
+(def voted-stories (user)
+  (keep [and (astory _) (cansee (the me) _)]
+        (map item (keys:votes user))))
 
 
 ; Story Display
@@ -1143,25 +1144,25 @@ function vote(node) {
 ; redefined later
 
 (def byline (i user)
-  (pr " by @(tostring (userlink user i!by)) @(text-age:item-age i) "))
+  (pr " by @(tostring (userlink i!by)) @(text-age:item-age i) "))
 
 (def user-url (user) (+ "user?id=" user))
 
 (= show-avg* nil)
 
-(def userlink (user subject (o show-avg t))
-  (link (user-name user subject) (user-url subject))
-  (awhen (and show-avg* (admin user) show-avg (uvar subject avg))
+(def userlink (user (o show-avg t))
+  (link (user-name user) (user-url user))
+  (awhen (and show-avg* (admin) show-avg (uvar user avg))
     (pr " (@(num it 1 t t))")))
 
 (= noob-color* (color 60 150 60))
 
-(def user-name (user subject)
-  (if (and (editor user) (ignored subject))
-       (tostring (fontcolor darkred (pr subject)))
-      (and (editor user) (< (user-age subject) 1440))
-       (tostring (fontcolor noob-color* (pr subject)))
-      subject))
+(def user-name (user)
+  (if (and (editor) (ignored user))
+       (tostring (fontcolor darkred (pr user)))
+      (and (editor) (< (user-age user) 1440))
+       (tostring (fontcolor noob-color* (pr user)))
+      user))
 
 (= show-threadavg* nil)
 
@@ -2164,20 +2165,20 @@ function vote(node) {
 
 (def threads-url (user) (+ "threads?id=" user))
 
-(newsop threads (id) 
+(newsop threads (id)
   (if id
-      (threads-page user id)
+      (threads-page id)
       (pr "No user specified.")))
 
-(def threads-page (user subject)
-  (if (profile subject)
-      (withs (title (+ subject "'s comments")
-              label (if (is user subject) "threads" title)
-              here  (threads-url subject))
-        (longpage user (msec) nil label title here
-          (awhen (keep [and (cansee user _) (~subcomment _)]
-                       (comments subject maxend*))
-            (display-threads user it label title here))))
+(def threads-page (user)
+  (if (profile user)
+      (withs (title (+ user "'s comments")
+              label (if (is (the me) user) "threads" title)
+              here  (threads-url user))
+        (longpage (the me) (msec) nil label title here
+          (awhen (keep [and (cansee (the me) _) (~subcomment _)]
+                       (comments user maxend*))
+            (display-threads (the me) it label title here))))
       (prn "No such user.")))
 
 (def display-threads (user comments label title whence
@@ -2213,23 +2214,24 @@ function vote(node) {
 
 (def submitted-url (user) (+ "submitted?id=" user))
        
-(newsop submitted (id) 
-  (if id 
-      (submitted-page user id)
+(newsop submitted (id)
+  (if id
+      (submitted-page id)
       (pr "No user specified.")))
 
-(def submitted-page (user subject)
-  (if (profile subject)
-      (with (label (+ subject "'s submissions")
-             here  (submitted-url subject))
-        (longpage user (msec) nil label label here
-          (if (or (no (ignored subject))
-                  (is user subject)
-                  (seesdead user))
-              (aif (keep [and (metastory _) (cansee user _)]
-                         (submissions subject))
-                   (display-items user it label label here 0 perpage* t)))))
-      (pr "No such user.")))
+(def submitted-page (user)
+  (let me (the me)
+    (if (profile user)
+        (with (label (+ user "'s submissions")
+               here  (submitted-url user))
+          (longpage me (msec) nil label label here
+            (if (or (no (ignored user))
+                    (is me user)
+                    (seesdead me))
+                (aif (keep [and (metastory _) (cansee me _)]
+                           (submissions user))
+                     (display-items me it label label here 0 perpage* t)))))
+        (pr "No such user."))))
 
 
 ; RSS
@@ -2267,7 +2269,7 @@ function vote(node) {
       (let i 0
         (each u (firstn nleaders* (leading-users))
           (tr (tdr:pr (++ i) ".")
-              (td (userlink user u nil))
+              (td (userlink u nil))
               (tdr:pr (karma u))
               (when (admin user)
                 (tdr:prt (only.num (uvar u avg) 2 t t))))
@@ -2281,7 +2283,7 @@ function vote(node) {
 
 (adop editors ()
   (tab (each u (users [is (uvar _ auth) 1])
-         (row (userlink user u)))))
+         (row (userlink u)))))
 
 
 (= update-avg-threshold* 0)  ; redefined later
@@ -2479,7 +2481,7 @@ first asterisk isn't whitespace.
             (td (w/rlink (do (set-site-ban user site 'ignore) "badsites")
                   (fontcolor (case ban ignore darkred gray.220) (pr "x"))))
             (td (each u (dedup (map !by deads))
-                  (userlink user u nil)
+                  (userlink u nil)
                   (pr " "))))))))
 
 (defcache killedsites 300
@@ -2527,7 +2529,7 @@ first asterisk isn't whitespace.
                          (listpage user (msec) (goods ip)
                                    nil (+ "live from " ip) "badips")))
             (td (each u (subs ip)
-                  (userlink user u nil) 
+                  (userlink u nil) 
                   (pr " "))))))))
 
 (defcache badips 300
@@ -2584,7 +2586,7 @@ first asterisk isn't whitespace.
 (adop badguys ()
   (tab (each u (sort (compare > [uvar _ created])
                      (users [ignored _]))
-         (row (userlink user u nil)))))
+         (row (userlink u nil)))))
 
 (adop badlogins ()  (logins-page bad-logins*))
 

@@ -74,7 +74,7 @@
         (login-page 'login nil
                     (fn (u ip) (admin-gate u))))))
 
-(def admin (u) (and u (mem u admins*)))
+(def admin ((t u me)) (and u (mem u admins*)))
 
 (def user-exists (u) (and u (hpasswords* u) u))
 
