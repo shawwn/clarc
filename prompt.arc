@@ -26,12 +26,11 @@
               (td (hspace 40)
                   (ulink user 'delete (rem-app  app))))))
       (br2)
-      (aform (fn (req)
-               (when-umatch user
-                 (aif (goodname arg!app)
-                      (edit-app it)
-                      (prompt-page "Bad name."))))
-         (tab (row "name:" (input "app") (submit "create app")))))))
+      (aform (when-umatch user
+               (aif (goodname arg!app)
+                    (edit-app it)
+                    (prompt-page "Bad name.")))
+        (tab (row "name:" (input "app") (submit "create app")))))))
 
 (def app-path (user app) 
   (and user app (+ appdir* user "/" app)))
@@ -57,13 +56,12 @@
   (whitepage
     (pr "user: " me " app: " app)
     (br2)
-    (aform (fn (req)
-             (if (is (the me) me)
-                 (do (when (is arg!cmd "save")
-                       (write-app me app (readall arg!exprs)))
-                     (prompt-page))
-                 (login-page 'both nil
-                             (fn (u ip) (w/me u (prompt-page))))))
+    (aform (if (is (the me) me)
+               (do (when (is arg!cmd "save")
+                     (write-app me app (readall arg!exprs)))
+                   (prompt-page))
+               (login-page 'both nil
+                           (fn (u ip) (w/me u (prompt-page)))))
       (textarea "exprs" 10 82
         (pprcode (read-app me app)))
       (br2)

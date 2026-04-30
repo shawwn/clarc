@@ -728,18 +728,16 @@ function vote(node) {
                (fn () (newsadmin-page user)))
 
     (br2)
-    (aform (fn (req)
-             (with (user (the me) subject arg!id)
-               (if (profile subject)
-                   (do (killallby subject)
-                       (submitted-page user subject))
-                   (admin&newsadmin-page user))))
+    (aform (with (user (the me) subject arg!id)
+             (if (profile subject)
+                 (do (killallby subject)
+                     (submitted-page user subject))
+                 (admin&newsadmin-page user)))
       (single-input "" 'id 20 "kill all by"))
     (br2)
-    (aform (fn (req)
-             (let user (the me)
-               (set-ip-ban user arg!ip t)
-               (admin&newsadmin-page user)))
+    (aform (let user (the me)
+             (set-ip-ban user arg!ip t)
+             (admin&newsadmin-page user))
       (single-input "" 'ip 20 "ban ip"))))
 
 
@@ -1982,10 +1980,9 @@ function vote(node) {
 
 (def comment-form (parent user whence (o text))
   (tarform 1800
-           (fn (req)
-             (when-umatch/r user
-               (process-comment user parent arg!text (the ip) whence)))
-    (textarea "text" 6 60  
+           (when-umatch/r user
+             (process-comment user parent arg!text (the ip) whence))
+    (textarea "text" 6 60
       (aif text (prn (unmarkdown it))))
     (when (and noob-comment-msg* (noob user))
       (br2)
