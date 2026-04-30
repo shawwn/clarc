@@ -26,10 +26,9 @@
               (td (hspace 40)
                   (ulink 'delete (rem-app  app))))))
       (br2)
-      (aform (when-umatch user
-               (aif (goodname arg!app)
-                    (edit-app it)
-                    (prompt-page "Bad name.")))
+      (uform (aif (goodname arg!app)
+                  (edit-app it)
+                  (prompt-page "Bad name."))
         (tab (row "name:" (input "app") (submit "create app")))))))
 
 (def app-path (app (t user me))
