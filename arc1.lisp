@@ -604,14 +604,27 @@ isn't shadowed by a lexical binding."
     ((or (null args) (arc-sym= args "nil")) nil)
     ((symbolp args) (list (list args ra)))
     ((consp args)
-     (let* ((x (if (and (consp (car args)) (arc-sym= (caar args) "o"))
-                   (ac-complex-opt (cadar args)
-                                   (if (consp (cddar args)) (caddar args) nil)
-                                   env ra)
-                   (ac-complex-args
-                    (car args) env
-                    (if is-params `(car ,ra) `(arc-xcar ,ra))
-                    nil)))
+     (let* ((x (cond
+                 ((and (consp (car args)) (arc-sym= (caar args) "o"))
+                  (ac-complex-opt (cadar args)
+                                  (if (consp (cddar args)) (caddar args) nil)
+                                  env ra))
+                 ;; (t var)         => (o var (the var))
+                 ;; (t local var)   => (o local (the var))
+                 ;; thread-local fallback: arg defaults to (the var) if
+                 ;; the caller didn't supply one. See examples/the.arc.
+                 ((and (consp (car args)) (arc-sym= (caar args) "t"))
+                  (let* ((parms (cdar args))
+                         (local (car parms))
+                         (key (if (consp (cdr parms)) (cadr parms) local)))
+                    (ac-complex-opt local
+                                    (list (intern "the" (sym-pkg (caar args)))
+                                          key)
+                                    env ra)))
+                 (t (ac-complex-args
+                     (car args) env
+                     (if is-params `(car ,ra) `(arc-xcar ,ra))
+                     nil))))
             (xa (ac-complex-getargs x)))
        (append x (ac-complex-args (cdr args)
                                   (append xa env)

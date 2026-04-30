@@ -448,5 +448,73 @@ c"
     (test? 'b (case (f) 0 'a 1 'b 'c)))
   (test? 'b ((fn () (case 2 0 (do) 1 'a 2 'b)))))
 
+(define-test thread-local-the
+  ;; (the var) returns nil when unset; (= (the var) val) sets it
+  (= (the test-tl) nil)
+  (test? nil (the test-tl))
+  (= (the test-tl) 42)
+  (test? 42 (the test-tl))
+  (= (the test-tl) "hello")
+  (test? "hello" (the test-tl))
+  ;; isolation between different keys
+  (= (the test-tl) 1  (the test-tl2) 2)
+  (test? 1 (the test-tl))
+  (test? 2 (the test-tl2)))
+
+(define-test thread-local-w/the
+  ;; w/the binds for the body, restores on exit (including on error)
+  (= (the test-tl) 'outer)
+  (w/the test-tl 'inner
+    (test? 'inner (the test-tl)))
+  (test? 'outer (the test-tl))
+  ;; restoration on error
+  (errsafe
+    (w/the test-tl 'errored
+      (err "boom")))
+  (test? 'outer (the test-tl))
+  ;; nested
+  (w/the test-tl 'a
+    (test? 'a (the test-tl))
+    (w/the test-tl 'b
+      (test? 'b (the test-tl)))
+    (test? 'a (the test-tl)))
+  (test? 'outer (the test-tl)))
+
+(define-test thread-local-w/me
+  ;; w/me is shorthand for (w/the me ...)
+  (= (the me) 'baseline)
+  (w/me 'overridden
+    (test? 'overridden (the me)))
+  (test? 'baseline (the me)))
+
+(define-test thread-local-t-param
+  ;; (t var) -- arg defaults to (the var) if caller omits it
+  (def get-tl-me ((t me)) me)
+  (= (the me) 'thread-default)
+  (test? 'thread-default (get-tl-me))
+  (test? 'explicit (get-tl-me 'explicit))
+  ;; (t local var) -- local name differs from thread-local key
+  (def get-as-u ((t u me)) u)
+  (test? 'thread-default (get-as-u))
+  (test? 'override (get-as-u 'override))
+  ;; mixing positional + (t var)
+  (def greet (g (t me)) (+ g " " (string me)))
+  (test? "hi thread-default" (greet "hi"))
+  (test? "hi bob" (greet "hi" 'bob)))
+
+(define-test thread-local-isolation
+  ;; each thread sees its own bindings
+  (= (the test-tl) 'main)
+  (with (done (sb-thread::make-semaphore)
+         child-saw nil)
+    (thread
+      (= (the test-tl) 'child)
+      (= child-saw (the test-tl))
+      (sb-thread::signal-semaphore done))
+    (sb-thread::wait-on-semaphore done)
+    (test? 'child child-saw)
+    ;; main's value is unchanged by child's mutation
+    (test? 'main (the test-tl))))
+
 (when (main)
   (run-tests))
