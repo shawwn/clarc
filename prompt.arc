@@ -88,7 +88,7 @@
 (wipe repl-history*)
 
 (defop repl
-  (if (admin (the me))
+  (if (admin)
       (replpage)
       (pr "Sorry.")))
 
