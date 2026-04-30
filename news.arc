@@ -241,8 +241,8 @@
 (def ok-id (id) 
   (and (exact id) (<= 1 id maxid*)))
 
-(def arg->item (req key)
-  (safe-item:saferead (arg req key)))
+(def arg->item (key)
+  (safe-item:saferead (arg key)))
 
 (def live (i) (nor i!dead i!deleted))
 
@@ -672,7 +672,7 @@ function vote(node) {
   (w/uniq gr
     `(,definer ,name ,gr
        (with (user (the me) ip (the ip))
-         (with ,(and parms (mappend [list _ (list 'arg gr (string _))]
+         (with ,(and parms (mappend [list _ (list 'arg (list 'quote _))]
                                     parms))
            (newslog ip user ',name ,@parms)
            ,@body)))))
@@ -729,7 +729,7 @@ function vote(node) {
 
     (br2)
     (aform (fn (req)
-             (with (user (the me) subject (arg req "id"))
+             (with (user (the me) subject arg!id)
                (if (profile subject)
                    (do (killallby subject)
                        (submitted-page user subject))
@@ -738,7 +738,7 @@ function vote(node) {
     (br2)
     (aform (fn (req)
              (let user (the me)
-               (set-ip-ban user (arg req "ip") t)
+               (set-ip-ban user arg!ip t)
                (admin&newsadmin-page user)))
       (single-input "" 'ip 20 "ban ip"))))
 
@@ -1312,7 +1312,7 @@ function vote(node) {
       (tr (td)
           (td (urform user
                       (do (when (candelete user i)
-                            (= i!deleted (is (arg req "b") "Yes"))
+                            (= i!deleted (is arg!b "Yes"))
                             (save-item i))
                           whence)
                  (prn "Do you want this to @(if i!deleted 'stay 'be) deleted?")
@@ -1446,10 +1446,10 @@ function vote(node) {
     (pagemessage msg)
     (urform user
             (process-story (the me)
-                           (clean-url (arg req "u"))
-                           (striptags (arg req "t"))
+                           (clean-url arg!u)
+                           (striptags arg!t)
                            showtext
-                           (and showtext (md-from-form (arg req "x") t))
+                           (and showtext (md-from-form arg!x t))
                            (the ip))
       (tab
         (row "title"  (input "t" title 50))
@@ -1696,9 +1696,9 @@ function vote(node) {
     (pagemessage msg)
     (urform user
             (process-poll (the me)
-                          (striptags (arg req "t"))
-                          (md-from-form (arg req "x") t)
-                          (striptags (arg req "o"))
+                          (striptags arg!t)
+                          (md-from-form arg!x t)
+                          (striptags arg!o)
                           (the ip))
       (tab   
         (row "title"   (input "t" title 50))
@@ -1745,7 +1745,7 @@ function vote(node) {
 (def add-pollopt-page (p user)
   (minipage "Add Poll Choice"
     (urform user
-            (do (add-pollopt user p (striptags (arg req "x")) (the ip))
+            (do (add-pollopt user p (striptags arg!x) (the ip))
                 (item-url p!id))
       (tab
         (row "text" (textarea "x" 4 50))
@@ -1984,7 +1984,7 @@ function vote(node) {
   (tarform 1800
            (fn (req)
              (when-umatch/r user
-               (process-comment user parent (arg req "text") (the ip) whence)))
+               (process-comment user parent arg!text (the ip) whence)))
     (textarea "text" 6 60  
       (aif text (prn (unmarkdown it))))
     (when (and noob-comment-msg* (noob user))
@@ -2420,7 +2420,7 @@ first asterisk isn't whitespace.
              (pr ". Otherwise you could lose your account if you mistype 
                   your new password.")))
     (br2)
-    (uform user (try-resetpw user (arg req "p"))
+    (uform user (try-resetpw user arg!p)
       (single-input "New password: " 'p 20 "reset" t))))
 
 (def try-resetpw (user newpw)
@@ -2443,8 +2443,8 @@ first asterisk isn't whitespace.
   (minipage "Scrubrules"
     (when msg (pr msg) (br2))
     (uform user
-           (with (froms (lines (arg req "from"))
-                  tos   (lines (arg req "to")))
+           (with (froms (lines arg!from)
+                  tos   (lines arg!to))
              (if (is (len froms) (len tos))
                  (do (todisk scrubrules* (map list froms tos))
                      (scrub-page user scrubrules* "Changes saved."))

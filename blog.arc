@@ -36,7 +36,7 @@
 (defop viewpost req (blogop post-page req))
 
 (def blogop (f req)
-  (aif (post (arg req "id"))
+  (aif (post arg!id)
        (f it)
        (blogpage (pr "No such post."))))
 
@@ -54,7 +54,7 @@
 
 (defopl newpost req
   (whitepage
-    (aform [post-page (addpost (arg _ "t") (arg _ "b"))]
+    (aform [post-page (addpost arg!t arg!b)]
       (tab (row "title" (input "t" "" 60))
            (row "text"  (textarea "b" 10 80))
            (row ""      (submit))))))
