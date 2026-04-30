@@ -759,7 +759,7 @@ function vote(node) {
     (vars-form (user-fields user)
                (fn (name val)
                  (when (and (is name 'ignore) val (no prof!ignore))
-                   (log-ignore (the me) user 'profile))
+                   (log-ignore user 'profile))
                  (= (prof name) val))
                (fn () (save-prof user)
                       (user-page user)))))
@@ -1271,7 +1271,7 @@ function vote(node) {
             (awhen (and nuke (sitename i!url))
               (set-site-ban user it nil)))
         (do (set i!dead)
-            (ignore user i!by (if nuke 'nuke 'blast))
+            (ignore i!by (if nuke 'nuke 'blast))
             (awhen (and nuke (sitename i!url))
               (set-site-ban user it 'ignore))))
     (if i!dead (log-kill i user))
@@ -1591,15 +1591,19 @@ function vote(node) {
 
 ; Bans
 
-(def ignore (user subject cause)
-  (set (ignored subject))
-  (save-prof subject)
-  (log-ignore user subject cause))
+; user is the user being ignored. actor is who's doing the
+; ignoring; defaults to (the me) for interactive ignores, but
+; site-ban-test / comment-ban-test pass nil to record a system
+; action with no human actor.
+(def ignore (user cause (t actor me))
+  (set (ignored user))
+  (save-prof user)
+  (log-ignore user cause actor))
 
 (diskvar ignore-log* (+ newsdir* "ignore-log"))
 
-(def log-ignore (user subject cause)
-  (todisk ignore-log* (cons (list subject user cause) ignore-log*)))
+(def log-ignore (user cause (t actor me))
+  (todisk ignore-log* (cons (list user actor cause) ignore-log*)))
 
 ; Kill means stuff with this substring gets killed. Ignore is stronger,
 ; means that user will be auto-ignored.  Eventually this info should
@@ -1634,7 +1638,7 @@ function vote(node) {
 
 (def site-ban-test (user i url)
   (whenlet ban (banned-sites* (sitename url))
-    (if (caris ban 'ignore) (ignore nil user 'site-ban))
+    (if (caris ban 'ignore) (ignore user 'site-ban nil))
     (kill i 'site-ban)))
 
 (def ip-ban-test (i ip)
@@ -1642,7 +1646,7 @@ function vote(node) {
 
 (def comment-ban-test (user i ip string kill-list ignore-list)
   (when (some [posmatch _ string] ignore-list)
-    (ignore nil user 'comment-ban))
+    (ignore user 'comment-ban nil))
   (when (or (banned-ips* ip) (some [posmatch _ string] kill-list))
     (kill i 'comment-ban)))
 
