@@ -41,6 +41,8 @@
   (let m (the me)
     (if other (and (is m other) m) m)))
 
+(def ip () (the ip))
+
 (mac w/me (val . body)
   `(w/the me ,val ,@body))
 
@@ -141,7 +143,7 @@
   (save-table hpasswords* hpwfile*))
 
 (def hello-page ()
-  (whitepage (prs "hello" (the me) "at" (the ip))))
+  (whitepage (prs "hello" (me) "at" (ip))))
 
 (defop login (login-page 'login))
 
@@ -173,18 +175,18 @@
           (acons afterward)))
 
 (def login-handler (switch afterward)
-  (logout-user (the me))
-  (aif (good-login arg!u arg!p (the ip))
-       (login it (the ip) (user->cookie* it) afterward)
+  (logout-user (me))
+  (aif (good-login arg!u arg!p (ip))
+       (login it (ip) (user->cookie* it) afterward)
        (failed-login switch "Bad login." afterward)))
 
 (def create-handler (switch afterward)
-  (logout-user (the me))
+  (logout-user (me))
   (with (user arg!u pw arg!p)
     (aif (bad-newacct user pw)
          (failed-login switch it afterward)
          (do (create-acct user pw)
-             (login user (the ip) (cook-user user) afterward)))))
+             (login user (ip) (cook-user user) afterward)))))
 
 (def login (user ip cookie afterward)
   (= (logins* user) ip)
@@ -269,7 +271,7 @@
 
 (defop whoami
   (aif (me)
-       (prs it 'at (the ip))
+       (prs it 'at (ip))
        (do (pr "You are not logged in. ")
            (w/link (login-page 'both) (pr "Log in"))
            (pr "."))))

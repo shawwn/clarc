@@ -271,7 +271,7 @@
 (def loaded-items (test)
   (accum a (each-loaded-item i (test&a i))))
 
-(def newslog args (apply srvlog 'news (the ip) (the me) args))
+(def newslog args (apply srvlog 'news (ip) (me) args))
 
 
 ; Ranking
@@ -666,7 +666,7 @@ function vote(node) {
 
 (mac opexpand (definer name parms . body)
   `(,definer ,name
-     (with (user (the me) ip (the ip))
+     (with (user (me) ip (ip))
        (with ,(and parms (mappend [list _ (list 'arg (list 'quote _))]
                                   parms))
          (newslog ',name ,@parms)
@@ -1528,7 +1528,7 @@ function vote(node) {
            (ignored user)
            (< (user-age user) new-age-threshold*)
            (< (karma user) new-karma-threshold*))
-       (len> (recent-items [or (author _) (is _!ip (the ip))] 180)
+       (len> (recent-items [or (author _) (is _!ip (ip))] 180)
              (if (is kind 'story)
                  (if (bad-user user) 0 1)
                  (if (bad-user user) 1 10)))))
@@ -1573,7 +1573,7 @@ function vote(node) {
   (newslog 'create url (list title))
   (let s (inst 'item 'type 'story 'id (new-item-id)
                      'url url 'title title 'text text
-                     'by (the me) 'ip (the ip))
+                     'by (me) 'ip (ip))
     (save-item s)
     (= (items* s!id) s)
     (unless (blank url) (register-url s url))
@@ -1639,7 +1639,7 @@ function vote(node) {
 (def comment-ban-test (i string kill-list ignore-list (t user me))
   (when (some [posmatch _ string] ignore-list)
     (ignore user 'comment-ban nil))
-  (when (or (banned-ips* (the ip)) (some [posmatch _ string] kill-list))
+  (when (or (banned-ips* (ip)) (some [posmatch _ string] kill-list))
     (kill i 'comment-ban)))
 
 ; An IP is banned when multiple ignored users have submitted over
@@ -1713,7 +1713,7 @@ function vote(node) {
   (newslog 'create-poll title)
   (let p (inst 'item 'type 'poll 'id (new-item-id)
                      'title title 'text text
-                     'by (the me) 'ip (the ip))
+                     'by (me) 'ip (ip))
     (= p!parts (map get!id (map [create-pollopt p nil nil _]
                                 (paras opts))))
     (save-item p)
@@ -1724,7 +1724,7 @@ function vote(node) {
 (def create-pollopt (p url title text)
   (let o (inst 'item 'type 'pollopt 'id (new-item-id)
                      'url url 'title title 'text text 'parent p!id
-                     'by (the me) 'ip (the ip))
+                     'by (me) 'ip (ip))
     (save-item o)
     (= (items* o!id) o)
     o))
@@ -1790,10 +1790,10 @@ function vote(node) {
 
 (def note-baditem ()
   (unless (admin)
-    (++ (baditemreqs* (the ip) 0))
-    (with (r (requests/ip* (the ip)) b (baditemreqs* (the ip)))
+    (++ (baditemreqs* (ip) 0))
+    (with (r (requests/ip* (ip)) b (baditemreqs* (ip)))
        (when (and (> r 500) (> (/ b r) baditem-threshold*))
-         (set (throttle-ips* (the ip)))))))
+         (set (throttle-ips* (ip)))))))
 
 ; redefined later
 
@@ -2004,7 +2004,7 @@ function vote(node) {
   (newslog 'comment (parent 'id))
   (let c (inst 'item 'type 'comment 'id (new-item-id)
                      'text text 'parent parent!id
-                     'by (the me) 'ip (the ip))
+                     'by (me) 'ip (ip))
     (save-item c)
     (= (items* c!id) c)
     (push c!id parent!kids)
