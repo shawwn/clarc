@@ -34,6 +34,7 @@
     (arc:arc-load (merge-pathnames "arc.arc" arc-dir))
     (arc-vlog "Loading libs.arc...~%")
     (ignore-errors (arc:arc-load (merge-pathnames "libs.arc" arc-dir)))
+    (setf (arc::arc-global 'arc::|main-file*|) nil)
     (when files
       (setf (arc::arc-global 'arc::|main-file*|)
             (namestring (truename (car (last files))))))
