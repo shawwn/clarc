@@ -515,5 +515,12 @@ c"
     ;; main's value is unchanged by child's mutation
     (test? 'main (the test-tl))))
 
+(define-test ssyntax-with-cl-packages
+  (test? '(complement sb-thread::make-mutex) (ssexpand '~sb-thread::make-mutex))
+  (test? '(compose a sb-thread::make-mutex) (ssexpand 'a:sb-thread::make-mutex))
+  (test? '(andf a sb-thread::make-mutex) (ssexpand 'a&sb-thread::make-mutex))
+  (test? nil (~sb-thread::make-mutex))
+  (test? 1 (len:accum a (a:sb-thread::make-mutex))))
+
 (when (main)
   (run-tests))

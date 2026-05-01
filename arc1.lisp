@@ -59,12 +59,19 @@ empty-name symbol (`||`) from no token at all."
              (t (write-char (read-char stream) buf))))))
      had-vbar)))
 
+(defun ssyntax-char-p (c)
+  (member c '(#\: #\~ #\& #\. #\!)))
+
 (defun cl-package-qualified-p (str)
   "True if STR has the form pkg::name with non-empty pkg and name.
-We only recognise the double-colon form; single colon stays compose ssyntax."
+We only recognise the double-colon form; single colon stays compose ssyntax.
+Either side containing an ssyntax char (e.g. a:sb-thread::x, sb-thread::x:b,
+a&sb-thread::x) means this token belongs to ssyntax expansion, not pkg-qualified
+interning -- ssyntax expansion will recurse into the qualified piece."
   (let ((p (search "::" str)))
     (and p (> p 0) (< (+ p 2) (length str))
-         ;; reject a second :: in the same token
+         (not (find-if #'ssyntax-char-p str :end p))
+         (not (find-if #'ssyntax-char-p str :start (+ p 2)))
          (not (search "::" str :start2 (+ p 2))))))
 
 (defun arc-keyword-token-p (str)
@@ -320,7 +327,30 @@ errors out clearly rather than polluting (often locked) CL packages."
   (intern (coerce chars 'string) pkg))
 
 (defun chars->value (chars)
-  (arc-intern-token (coerce chars 'string)))
+  (let ((str (coerce chars 'string)))
+    (if (cl-package-qualified-p str)
+        (intern-cl-qualified str)
+        (arc-intern-token str))))
+
+;; Tokenise CHARS for compose ssyntax: split on a single `:`, but keep
+;; `::` (CL pkg-qualified marker) inside the surrounding token so e.g.
+;; a:sb-thread::make-mutex -> ("a" "sb-thread::make-mutex").
+(defun compose-tokens (chars)
+  (let ((tokens nil) (cur nil))
+    (labels ((flush () (when cur (push (nreverse cur) tokens) (setf cur nil))))
+      (loop while chars do
+        (let ((c (car chars)))
+          (cond
+            ((and (eql c #\:) (eql (cadr chars) #\:))
+             (push c cur) (push c cur)
+             (setf chars (cddr chars)))
+            ((eql c #\:)
+             (flush)
+             (setf chars (cdr chars)))
+            (t (push c cur)
+               (setf chars (cdr chars))))))
+      (flush)
+      (nreverse tokens))))
 
 (defun sym->chars (x) (coerce (symbol-name x) 'list))
 
@@ -338,10 +368,25 @@ errors out clearly rather than polluting (often locked) CL packages."
 
 (defun sym-pkg (sym) (symbol-package sym))
 
+;; Like (find c str) but treats `::` runs as transparent, so a `:`
+;; that's part of a CL package marker doesn't trigger compose dispatch.
+(defun find-outside-cl-marker (c str)
+  (loop with len = (length str)
+        with i = 0
+        while (< i len)
+        do (cond
+             ((and (char= (char str i) #\:)
+                   (< (1+ i) len)
+                   (char= (char str (1+ i)) #\:))
+              (incf i 2))
+             ((char= (char str i) c) (return-from find-outside-cl-marker i))
+             (t (incf i))))
+  nil)
+
 (defun expand-ssyntax (sym)
   (let ((n (symbol-name sym)))
     (cond
-      ((or (find #\: n) (find #\~ n)) (expand-compose sym))
+      ((or (find-outside-cl-marker #\: n) (find #\~ n)) (expand-compose sym))
       ((or (find #\. n) (find #\! n)) (expand-sexpr sym))
       ((find #\& n) (expand-and sym))
       (t (error "Unknown ssyntax: ~S" sym)))))
@@ -355,8 +400,7 @@ errors out clearly rather than polluting (often locked) CL packages."
                            (intern "no" pkg)
                            `(,(intern "complement" pkg) ,(chars->value (cdr tok))))
                        (chars->value tok)))
-                 (arc-tokens (lambda (c) (eql c #\:))
-                             (sym->chars sym) nil nil nil))))
+                 (compose-tokens (sym->chars sym)))))
       (if (null (cdr elts))
           (car elts)
           (cons (intern "compose" pkg) elts)))))

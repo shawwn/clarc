@@ -864,6 +864,10 @@
                       (return-from iter)))
                    (error (lambda (c)
                             (arc-report-error c)
+                            ;; Drop the rest of the buffered line so a
+                            ;; mid-token read error doesn't leave stray
+                            ;; delimiters that re-trigger on each prompt.
+                            (clear-input *standard-input*)
                             (return-from iter))))
       (let ((expr (arc-read *standard-input* nil :eof)))
         (cond
