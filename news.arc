@@ -630,13 +630,13 @@ function vote(node) {
   (tag-if (is name label) (span class 'topsel)
     (link name dest)))
 
-(def topright (whence (o showkarma t))
+(def topright ((o whence 'news) (o showkarma t))
   (when (me)
     (userlink (me) nil)
     (when showkarma (pr  "&nbsp;(@(karma))"))
     (pr "&nbsp;|&nbsp;"))
   (if (me)
-      (urlink 'logout (logout-user) whence)
+      (underlink "logout" (logout-link whence))
       (onlink "login"
         (login-page 'both nil
                     (list (fn ()
@@ -1235,14 +1235,21 @@ function vote(node) {
 (def killlink (i whence)
   (when (admin)
     (pr bar*)
-    (w/rlink (do (zap no i!dead)
-                 (if i!dead
-                     (do (pull 'nokill i!keys)
-                         (log-kill i))
-                     (pushnew 'nokill i!keys))
-                 (save-item i)
-                 whence)
-      (pr "@(if i!dead 'un)kill"))))
+    (link "@(if i!dead 'un)kill"
+          (auth-link 'kill `((id ,i!id) (un ,i!dead)) whence))))
+
+(defopr kill
+  (whenlet i (safe-item arg!id)
+    (when (and (admin) (auth 'kill `((id ,i!id) (un ,i!dead))))
+      (kill-op i arg!un)))
+  nil)
+
+(def kill-op (i alive)
+  (if (= i!dead (no alive))
+      (do (pull 'nokill i!keys)
+          (log-kill i))
+      (pushnew 'nokill i!keys))
+  (save-item i))
 
 ; Blast kills the submission and bans the user.  Nuke also bans the 
 ; site, so that all future submitters will be ignored.  Does not ban 

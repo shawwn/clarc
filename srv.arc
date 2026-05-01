@@ -138,17 +138,11 @@
         (if srv-noisy* (pr "\n\n"))
         (respond o op (+ (parseargs (string (rev line))) args) cooks ip))))
 
-(= header* "HTTP/1.1 200 OK
-Content-Type: text/html; charset=utf-8
-Connection: close")
-
 (= type-header* (table))
 
 (def gen-type-header (ctype)
   (+ "HTTP/1.0 200 OK
-Content-Type: "
-     ctype
-     "
+Content-Type: " ctype "
 Connection: close"))
 
 (map (fn ((k v)) (= (type-header* k) (gen-type-header v)))
@@ -157,7 +151,8 @@ Connection: close"))
        (png       "image/png")
        (text/html "text/html; charset=utf-8")))
 
-(= rdheader* "HTTP/1.0 302 Moved")
+(= header* (gen-type-header "text/html; charset=utf-8")
+   rdheader* "HTTP/1.0 302 Moved")
 
 (= srvops* (table) redirector* (table) optimes* (table) opcounts* (table))
 
@@ -223,7 +218,8 @@ Connection: close"))
                  (w/the me (errsafe (get-user req))
                    (if (redirector* op)
                        (do (prn rdheader*)
-                           (prn "Location: " (f str req))
+                           (let url (or (f str req) arg!goto)
+                             (prn "Location: " (or (safe-goto url) "/")))
                            (prn))
                        (do (prn header*)
                            (awhen (max-age* op)
@@ -239,6 +235,15 @@ Connection: close"))
                         (whilet b (readb i)
                           (writeb b str))))
                   (respond-err str unknown-msg*))))))
+
+; Restrict goto to a same-origin path. Refuse anything that could
+; redirect off-site (scheme, protocol-relative, or whitespace).
+(def safe-goto (g)
+  (if (isa g 'sym) (zap string g))
+  (and g (isa g 'string) (~empty g)
+       (no (some [in _ #\: #\\ #\space #\newline #\return] g))
+       (no (and (>= (len g) 2) (is (g 0) #\/) (is (g 1) #\/)))
+       (string (if (is (g 0) #\/) (cut g 1) g))))
 
 (def static-filetype (sym)
   (let fname (coerce sym 'string)
@@ -303,7 +308,7 @@ Connection: close"))
 ;   (arg 'id)    ; symbol --- arc sugar:
 ;   arg!id       ; equivalent to (arg 'id)
 (def arg (key)
-  (let req (the req)
+  (whenlet req (the req)
     (alref req!args (if (isa key 'sym) (string key) key))))
 
 ; *** Warning: does not currently urlencode args, so if need to do

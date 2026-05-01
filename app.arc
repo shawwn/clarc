@@ -6,10 +6,11 @@
 
 ; A user is simply a string: "pg". Use /whoami to test user cookie.
 
-(= hpwfile*   "arc/hpw"
-   oidfile*   "arc/openids"
-   adminfile* "arc/admins"
-   cookfile*  "arc/cooks")
+(= hpwfile*      "arc/hpw"
+   oidfile*      "arc/openids"
+   adminfile*    "arc/admins"
+   cookfile*     "arc/cooks"
+   secretsfile*  "arc/user-secrets")
 
 (def asv ((o port 8080))
   (load-userinfo)
@@ -19,13 +20,26 @@
   (= hpasswords*   (safe-load-table hpwfile*)
      openids*      (safe-load-table oidfile*)
      admins*       (map string (errsafe (readfile adminfile*)))
-     cookie->user* (safe-load-table cookfile*))
+     cookie->user* (safe-load-table cookfile*)
+     user-secret*  (safe-load-table secretsfile*))
   (maptable (fn (k v) (= (user->cookie* v) k))
             cookie->user*))
 
 ; idea: a bidirectional table, so don't need two vars (and sets)
 
-(= cookie->user* (table) user->cookie* (table) logins* (table))
+(= cookie->user* (table) user->cookie* (table) logins* (table)
+   user-secret* (table))
+
+; Per-user signing key for derived auth tokens (CSRF action-links and,
+; eventually, API capabilities). Kept on disk, never sent to clients.
+; Lazily minted on first reference; rotating one entry invalidates only
+; that user's outstanding auth links.
+(def user-secret (user)
+  (or (user-secret* user)
+      (let s (shash (string user "/" (rand-string 40) "/" (msec)))
+        (= (user-secret* user) s)
+        (save-table user-secret* secretsfile*)
+        s)))
 
 (def get-user (req)
   (let u (aand (alref req!cooks "user") (cookie->user* (sym it)))
@@ -134,6 +148,22 @@
   (wipe (logins* user))
   (wipe (cookie->user* (user->cookie* user)) (user->cookie* user))
   (save-table cookie->user* cookfile*))
+
+; Per-(user, op, args...) CSRF token, derived from the user's secret.
+; Stable across logins/cookies so links like /logout?auth=... can be
+; embedded in pages without leaking the cookie or letting an attacker
+; forge them. The op name (and any extra args, e.g. an item id) scope
+; the token: a stolen flag link can't be replayed against /logout, and
+; a flag link bound to one item can't be replayed against another.
+; Format matches HN (40 hex chars, sha1).
+(def gen-auth (op (o args))
+  (awhen (me)
+    (let parts (cons it (user-secret it) op (map cadr (keep cadr args)))
+      (shash (apply string (intersperse "/" parts))))))
+
+(def auth (op (o args))
+  (aand (gen-auth op args)
+        (is arg!auth it)))
 
 (def create-acct (user pw)
   (set (dc-usernames* (downcase user)))
@@ -268,11 +298,23 @@
        (or (no max) (<= (len str) max))
        str))
 
-(defop logout
-  (if (me)
-      (do (logout-user)
-          (pr "Logged out."))
-      (pr "You were not logged in.")))
+(def auth-link (op args (o whence))
+  (let parms (+ args
+                (accum a
+                  (awhen (gen-auth op args)
+                    (a (list 'auth it)))
+                  (awhen (safe-goto whence)
+                    (a (list 'goto it)))))
+    (+ "" op (reassemble-args (obj args (keep cadr parms))))))
+
+; CSRF-protected logout
+(defopr logout
+  (when (auth 'logout)
+    (logout-user))
+  nil)
+
+(def logout-link (whence)
+  (auth-link 'logout nil whence))
 
 (defop whoami
   (aif (me)

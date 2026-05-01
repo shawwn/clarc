@@ -133,6 +133,8 @@
 (attribute span       align          opstring)
 (attribute span       id             opsym)
 (attribute rss        version        opstring)
+(attribute meta       http-equiv     opstring)
+(attribute meta       content        opstring)
 
 
 (mac gentag args (start-tag args))
