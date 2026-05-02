@@ -63,36 +63,46 @@
        ws        (make-semaphore 1)
        turnstile (make-semaphore 1)))
 
+(def read-acquire (rw)
+  ; Pass through the turnstile. If a writer holds it we block here;
+  ; otherwise grab-and-release immediately so the next arrival can
+  ; come through.
+  (sem-wait rw!turnstile)
+  (sem-post rw!turnstile)
+  ; First reader claims the writer slot; subsequent readers just
+  ; bump the counter.
+  (w/mutex rw!m
+    (when (is rw!readers 0)
+      (sem-wait rw!ws))
+    (++ rw!readers)))
+
+(def read-release (rw)
+  ; Last reader returns the writer slot.
+  (w/mutex rw!m
+    (-- rw!readers)
+    (when (is rw!readers 0)
+      (sem-post rw!ws))))
+
+(def write-acquire (rw)
+  ; Hold the turnstile across the whole wait + critical section.
+  ; This is what guarantees no writer-starvation: from the moment
+  ; we hold it, no new reader can enter, so the in-flight reader
+  ; count is monotonically decreasing toward zero.
+  (sem-wait rw!turnstile)
+  (sem-wait rw!ws))
+
+(def write-release (rw)
+  (sem-post rw!ws)
+  (sem-post rw!turnstile))
+
 (mac w/read-lock (rw . body)
   (w/uniq g
     `(let ,g ,rw
-       ; Pass through the turnstile. If a writer holds it we block
-       ; here; otherwise grab-and-release immediately so the next
-       ; arrival can come through.
-       (sem-wait (,g 'turnstile))
-       (sem-post (,g 'turnstile))
-       ; First reader claims the writer slot; subsequent readers
-       ; just bump the counter.
-       (w/mutex (,g 'm)
-         (when (is (,g 'readers) 0)
-           (sem-wait (,g 'ws)))
-         (++ (,g 'readers)))
-       (after (do ,@body)
-         ; Last reader returns the writer slot.
-         (w/mutex (,g 'm)
-           (-- (,g 'readers))
-           (when (is (,g 'readers) 0)
-             (sem-post (,g 'ws))))))))
+       (read-acquire ,g)
+       (after (do ,@body) (read-release ,g)))))
 
 (mac w/write-lock (rw . body)
   (w/uniq g
     `(let ,g ,rw
-       ; Hold the turnstile across the whole wait + critical section.
-       ; This is what guarantees no writer-starvation: from the moment
-       ; we hold it, no new reader can enter, so the in-flight reader
-       ; count is monotonically decreasing toward zero.
-       (sem-wait (,g 'turnstile))
-       (sem-wait (,g 'ws))
-       (after (do ,@body)
-         (sem-post (,g 'ws))
-         (sem-post (,g 'turnstile))))))
+       (write-acquire ,g)
+       (after (do ,@body) (write-release ,g)))))
