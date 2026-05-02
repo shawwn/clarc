@@ -106,3 +106,40 @@
     `(let ,g ,rw
        (write-acquire ,g)
        (after (do ,@body) (write-release ,g)))))
+
+; Atomically transition from "holding the write lock" to "holding a
+; read lock as the lone reader." After this returns, the caller is
+; indistinguishable from a thread that arrived as the first reader:
+; other readers can join, no writer can enter, and the caller still
+; sees the state it just wrote (no mid-window where another writer
+; could intervene). MUST be paired with `read-release` for cleanup,
+; NOT `write-release`. Use `w/write-then-read-lock` for the macro
+; form that handles cleanup automatically.
+;
+; Caveat: same-thread re-entry through `w/read-lock` after downgrade
+; can still deadlock if a writer queued at the turnstile in the
+; meantime. The downgrade only protects you against losing your own
+; consistent view; it does not make the lock reentrant. Inside the
+; read phase, just read directly -- don't call helpers that take
+; another read lock.
+
+(def downgrade-to-read (rw)
+  (w/mutex rw!m (++ rw!readers))   ; become the first reader (0 -> 1)
+  (sem-post rw!turnstile))         ; release the arrival gate; ws stays held
+
+; Acquire as writer for `write-body`, downgrade, run `read-body` as
+; a reader. Cleanup picks the right release based on whether we
+; reached the downgrade.
+(mac w/write-then-read-lock (rw write-body . read-body)
+  (w/uniq (g downgraded)
+    `(let ,g ,rw
+       (let ,downgraded nil
+         (write-acquire ,g)
+         (after (do
+                  ,write-body
+                  (downgrade-to-read ,g)
+                  (= ,downgraded t)
+                  ,@read-body)
+           (if ,downgraded
+               (read-release ,g)
+               (write-release ,g)))))))

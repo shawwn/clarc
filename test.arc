@@ -578,6 +578,56 @@ c"
     (repeat n (sem-wait done))
     (test? t t)))
 
+(define-test locks-rwlock-downgrade
+  ;; Write a value, downgrade to read, read it back, and verify the
+  ;; lock state is fully released afterward (no leaked permits).
+  (let rw (make-rwlock 'down)
+    (= rw!data nil)
+    (w/write-then-read-lock rw
+      (= rw!data 'updated)            ; write phase
+      (test? 'updated rw!data))       ; read phase: still see what we wrote
+    ;; After the macro exits, the lock should be fully unowned.
+    (test? 1 (sb-thread::semaphore-count rw!ws))
+    (test? 1 (sb-thread::semaphore-count rw!turnstile))
+    (test? 0 rw!readers)))
+
+(define-test locks-rwlock-downgrade-allows-readers
+  ;; While we're in the read phase post-downgrade, other readers
+  ;; should be able to join concurrently.
+  (with (rw (make-rwlock 'down-conc)
+         in-read-phase (make-semaphore)
+         release (make-semaphore)
+         reader-done (make-semaphore))
+    ;; Spawn another reader that waits until we're in the read phase.
+    (thread
+      (sem-wait in-read-phase)
+      (w/read-lock rw
+        (sem-post reader-done)))
+    (w/write-then-read-lock rw
+      (= rw!shared 'written)
+      ;; Read phase: signal the other reader to join us.
+      (sem-post in-read-phase)
+      ;; The other reader should be able to acquire and signal done
+      ;; while we're still inside the read phase.
+      (sem-wait reader-done)
+      (test? 'written rw!shared))
+    (test? 1 (sb-thread::semaphore-count rw!ws))
+    (test? 1 (sb-thread::semaphore-count rw!turnstile))))
+
+(define-test locks-rwlock-downgrade-write-error-cleans-up
+  ;; If the write body errors before reaching the downgrade, cleanup
+  ;; should run as write-release (not read-release). errsafe catches
+  ;; the error so the test doesn't abort.
+  (let rw (make-rwlock 'down-err)
+    (errsafe
+      (w/write-then-read-lock rw
+        (err "boom")            ; never reaches downgrade
+        (test? t nil)))
+    ;; Lock state should be fully released even though we errored.
+    (test? 1 (sb-thread::semaphore-count rw!ws))
+    (test? 1 (sb-thread::semaphore-count rw!turnstile))
+    (test? 0 rw!readers)))
+
 (define-test locks-rwlock-writer-excludes-readers
   ;; A held write-lock must block read-lock attempts.
   (with (rw (make-rwlock 'rw-excl)
