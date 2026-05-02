@@ -7,6 +7,7 @@
 ;;;;   * otherwise:        drop into the Arc REPL
 
 (load (merge-pathnames "arc1.lisp" *load-pathname*))
+(load (merge-pathnames "sha1.lisp" *load-pathname*))
 
 (defun arc-verbose-p ()
   (let ((v (uiop:getenv "ARC_VERBOSE")))

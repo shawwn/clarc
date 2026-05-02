@@ -233,11 +233,12 @@
 ; Create a file in case people have quote chars in their pws.  I can't 
 ; believe there's no way to just send the chars.
 
+; SHA-1 hex digest. Was a fork+exec to `openssl dgst -sha1` per call;
+; with a large SBCL heap the fork overhead dominated page renders.
+; Now in-process via vendored sha1.lisp. Lowercased to match the
+; previous output format (existing on-disk hashes were lowercase).
 (def shash (str)
-  (let fname (+ "/tmp/shash" (rand-string 10))
-    (w/outfile f fname (disp str f))
-    (do1 (last (tokens (tostring (system (+ "openssl dgst -sha1 <" fname)))))
-         (rmfile fname))))
+  (downcase (sha1::sha1-hex str)))
 
 (= dc-usernames* (table))
 
