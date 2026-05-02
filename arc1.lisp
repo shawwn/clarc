@@ -457,6 +457,11 @@ errors out clearly rather than polluting (often locked) CL packages."
      (cons (car s) (mapcar (lambda (x) (ac x env)) (cdr s))))
     ((arc-sym= (arc-car? s) "quote") (list 'quote (ac-quoted (cadr s))))
     ((arc-sym= (arc-car? s) "quasiquote") (ac-qq (cadr s) env))
+    ((arc-sym= (arc-car? s) "quasisyntax") (ac-qs (cadr s) env))
+    ((arc-sym= (arc-car? s) "unsyntax")
+     (error "unsyntax outside quasisyntax: ~S" s))
+    ((arc-sym= (arc-car? s) "unsyntax-splicing")
+     (error "unsyntax-splicing outside quasisyntax: ~S" s))
     ((arc-sym= (arc-car? s) "%do") `(progn ,@(ac-body* (cdr s) env)))
     ((arc-sym= (arc-car? s) "if") (ac-if (cdr s) env))
     ((arc-sym= (arc-car? s) "fn") (ac-fn (cadr s) (cddr s) env))
@@ -597,6 +602,26 @@ isn't shadowed by a lexical binding."
     (t
      `(cons ,(ac-qq1 level (car x) env)
             ,(ac-qq1 level (cdr x) env)))))
+
+;;;; ---- quasisyntax ----
+;;; Unlike quasiquote (which builds a list at runtime via cons/list/append),
+;;; quasisyntax produces a literal CL form at compile time. (unsyntax e)
+;;; holes are replaced by (ac e env). The result is suitable as input to
+;;; CL macroexpansion, so #`(cl-macro #,arc-expr ...) lets you call CL
+;;; macros from arc with arc subexpressions in selected slots.
+;;;
+;;; (unsyntax-splicing e) is intentionally not supported -- splicing
+;;; would force a runtime list-construction expression, defeating the
+;;; "literal form for the macroexpander" purpose. To inject a body, use
+;;; #,(do ,@body) and rely on do -> progn.
+
+(defun ac-qs (x env)
+  (cond
+    ((not (consp x)) x)
+    ((arc-sym= (car x) "unsyntax") (ac (cadr x) env))
+    ((arc-sym= (car x) "unsyntax-splicing")
+     (error "unsyntax-splicing inside quasisyntax not supported: ~S" x))
+    (t (cons (ac-qs (car x) env) (ac-qs (cdr x) env)))))
 
 ;;;; ---- if ----
 

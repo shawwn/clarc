@@ -522,5 +522,29 @@ c"
   (test? nil (~sb-thread::make-mutex))
   (test? 1 (len:accum a (a:sb-thread::make-mutex))))
 
+(define-test quasisyntax
+  ;; CL `let` is a special form and needs ((var val) ...) unevaluated;
+  ;; without quasisyntax, ac would compile ((y 7)) as a function call.
+  (test? 7 #`(cl::let ((y 7)) y))
+  ;; #, substitutes an arc-evaluated expression into the hole.
+  (let v 41
+    (test? 41 #`(cl::let ((y #,v)) y)))
+  ;; The hole can be any arc expression.
+  (test? 6 #`(cl::let ((s #,(apply + '(1 2 3)))) s))
+  ;; Multiple holes in one form.
+  (with (a 10 b 32)
+    (test? 42 #`(cl::let ((x #,a) (y #,b)) (cl::+ x y))))
+  ;; Symbols not inside #, are passed through literally to CL --
+  ;; here `s` is a stream binding consumed by with-output-to-string.
+  (test? "hi 42" #`(cl::with-output-to-string (s)
+                     (cl::princ "hi " s)
+                     (cl::princ #,(+ 40 2) s)))
+  ;; unsyntax outside quasisyntax errors at compile time.
+  (test? nil (errsafe (eval (list 'unsyntax ''foo))))
+  ;; unsyntax-splicing inside quasisyntax is rejected.
+  (test? nil (errsafe (eval (list 'quasisyntax
+                                  (list 'foo (list 'unsyntax-splicing
+                                                   ''(1 2))))))))
+
 (when (main)
   (run-tests))
