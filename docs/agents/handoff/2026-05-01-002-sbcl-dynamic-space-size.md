@@ -1,6 +1,6 @@
 ---
-name: bump SBCL dynamic-space-size to 64 GB
-description: The default SBCL heap is too small for stress tests that retain millions of mutexes (e.g. `(accum a (repeat 10000000 (a (sb-thread:make-mutex))))`), which crashes the runtime out of dynamic space. The `sharc` launcher now passes `--dynamic-space-size 65536` (64 GB) so allocation-heavy explorations don't require remembering to start sbcl with custom flags. Note: the mutexes have to be kept reachable; throwing them away (`(repeat N (sb-thread:make-mutex))`) just GCs as it goes and never crashes.
+name: bump SBCL dynamic-space-size to 32 GB
+description: The default SBCL heap is too small for stress tests that retain millions of mutexes (e.g. `(accum a (repeat 10000000 (a (sb-thread:make-mutex))))`), which crashes the runtime out of dynamic space. The `sharc` launcher now passes `--dynamic-space-size 32768` (32 GB) -- matching what dang says HN runs on -- so allocation-heavy explorations don't require remembering to start sbcl with custom flags. Originally bumped to 64 GB; lowered to 32 GB after `shash` was moved in-process (handoff `004`) since the higher reservation inflated `fork()` cost on macOS. Override via `SHARC_HEAP_MB`. Note: the mutexes have to be kept reachable; throwing them away (`(repeat N (sb-thread:make-mutex))`) just GCs as it goes and never crashes.
 type: project
 ---
 
