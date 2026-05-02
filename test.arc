@@ -522,6 +522,92 @@ c"
   (test? nil (~sb-thread::make-mutex))
   (test? 1 (len:accum a (a:sb-thread::make-mutex))))
 
+(define-test locks-mutex
+  ;; w/mutex serializes access -- 100 increments from 4 threads should
+  ;; sum exactly to 400 with the mutex, and is racy without it.
+  (with (m (make-mutex 'count) n 0 done (make-semaphore))
+    (repeat 4
+      (thread
+        (repeat 100 (w/mutex m (++ n)))
+        (sem-post done)))
+    (repeat 4 (sem-wait done))
+    (test? 400 n)))
+
+(define-test locks-semaphore
+  ;; Producer signals, consumer waits -- count must match.
+  (with (s (make-semaphore) seen 0 done (make-semaphore))
+    (thread
+      (repeat 10 (sem-post s))
+      (sem-post done))
+    (sem-wait done)
+    (repeat 10 (sem-wait s) (++ seen))
+    (test? 10 seen)))
+
+(define-test locks-rwlock-mutex-property
+  ;; A write-lock must be exclusive against readers and other writers.
+  ;; Run 4 writers each doing 50 increments; result must be exactly 200.
+  (with (rw (make-rwlock 'rw-test) n 0 done (make-semaphore))
+    (repeat 4
+      (thread
+        (repeat 50 (w/write-lock rw (++ n)))
+        (sem-post done)))
+    (repeat 4 (sem-wait done))
+    (test? 200 n)))
+
+(define-test locks-rwlock-readers-concurrent
+  ;; Multiple readers should be able to hold the lock simultaneously.
+  ;; Each reader waits on `arrived` until all have entered, then signals
+  ;; `done`. If readers serialized, this would deadlock (the second
+  ;; reader couldn't enter while the first was waiting). Use a short
+  ;; deadline-style check via a timeout-ish signal count.
+  (with (rw (make-rwlock 'rw-conc)
+         arrived (make-semaphore)
+         enter (make-semaphore)
+         done (make-semaphore)
+         n 4)
+    (repeat n
+      (thread
+        (w/read-lock rw
+          (sem-post arrived)
+          (sem-wait enter))
+        (sem-post done)))
+    ;; Wait for all readers to be inside the critical section.
+    (repeat n (sem-wait arrived))
+    ;; Release them all.
+    (repeat n (sem-post enter))
+    (repeat n (sem-wait done))
+    (test? t t)))
+
+(define-test locks-rwlock-writer-excludes-readers
+  ;; A held write-lock must block read-lock attempts.
+  (with (rw (make-rwlock 'rw-excl)
+         writer-in (make-semaphore)
+         release (make-semaphore)
+         reader-in (make-semaphore)
+         done (make-semaphore))
+    ;; Writer takes the lock and parks.
+    (thread
+      (w/write-lock rw
+        (sem-post writer-in)
+        (sem-wait release))
+      (sem-post done))
+    (sem-wait writer-in)
+    ;; Reader tries to enter; should block on the turnstile (writer
+    ;; holds it) and not signal reader-in until the writer releases.
+    (thread
+      (w/read-lock rw (sem-post reader-in))
+      (sem-post done))
+    ;; Give the reader thread time to attempt the lock, then verify
+    ;; it hasn't entered yet by checking reader-in's count.
+    (sleep 0.05)
+    (test? 0 (sb-thread::semaphore-count reader-in))
+    ;; Release the writer; reader proceeds.
+    (sem-post release)
+    (sem-wait reader-in)
+    (sem-wait done)
+    (sem-wait done)
+    (test? t t)))
+
 (define-test quasisyntax
   ;; CL `let` is a special form and needs ((var val) ...) unevaluated;
   ;; without quasisyntax, ac would compile ((y 7)) as a function call.
