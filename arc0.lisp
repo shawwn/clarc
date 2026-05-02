@@ -61,6 +61,9 @@
   (multiple-value-bind (v present) (gethash (arc-sym-key s) *arc-globals*)
     (if present v (error "Unbound variable: ~A" s))))
 
+(defun (setf arc-global-ref) (val s)
+  (setf (arc-global s) val))
+
 (defun arc-global-name (name)
   (intern (concatenate 'string "arc--" (symbol-name name))))
 
