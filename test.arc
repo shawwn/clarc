@@ -2,6 +2,10 @@
 
 ; adapted from test.l in https://github.com/sctb/lumen
 
+;; lock.arc isn't loaded from libs.arc yet; pull it in for the lock
+;; tests below.
+(load "lock.arc")
+
 (= true 't false nil)
 
 (= tests* (table))
