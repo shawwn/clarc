@@ -663,6 +663,11 @@
     (let stories (rev ranked)
       (= stories* (map [item _!id] stories)
          ranked-stories* (map [item _!id] stories)))
+    ; news's load-items normally populates comments* alongside
+    ; stories*, but it only runs from (nsv) when stories* is nil --
+    ; we've just set stories*, so we have to seed comments*
+    ; ourselves or /newcomments shows an empty list.
+    (= comments* (sort (compare > !id) (keep acomment (vals items*))))
     ; Persist the ranking so a subsequent (nsv) -> (ensure-topstories)
     ; reads our order from disk instead of calling gen-topstories (which
     ; walks down by 1 from maxid*; with HN ids in the tens of millions
@@ -778,15 +783,18 @@
   ; restricting it to items we actually have.
   (let id (string u!id)
     (when (goodname id)
-      (let p (or (profs* id)
-                 (= (profs* id)
-                    (inst 'profile
-                          'id id
-                          'created (or u!created (seconds))
-                          'karma   (or u!karma 1)
-                          'about   u!about)))
-        (when u!karma (= p!karma u!karma))
-        (when u!about (= p!about u!about))
+      ; init-user sets up both profs* and an empty votes* table (plus
+      ; saves both).  Without the votes* table, rendering the front
+      ; page while logged in as an imported user crashes:
+      ; (votelinks i ...) calls ((votes) i!id), (votes) returns nil
+      ; when there's no on-disk file, and (nil id) -> "Function call
+      ; on non-function: NIL".  Re-using news's init-user keeps that
+      ; setup in one place.
+      (unless (profs* id) (init-user id))
+      (let p (profs* id)
+        (when u!created (= p!created u!created))
+        (when u!karma   (= p!karma   u!karma))
+        (when u!about   (= p!about   u!about))
         (save-prof id)
         ; Install the dev password so you can log in as imported
         ; users locally.  Only set if hpasswords* doesn't already
