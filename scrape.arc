@@ -616,9 +616,23 @@
 ; created items if any.  Guard with `(news-active?)` and the user's
 ; explicit call to (import-scrape!).
 
+; Scraper username as a symbol, used as the single flagger on every
+; imported `[flagged]` comment.  Set by `import-scrape!` from the
+; current scrape.json so the value matches the account that fetched
+; the page.  Defaults to 'hnscraper for direct callers of
+; `import-scraped-comment`.
+(= scrape-flagger* 'hnscraper)
+
 (def import-scrape! ()
   (map ensure-dir (list scrape-dir* scrape-item-dir* scrape-user-dir*
                         arcdir* newsdir* storydir* profdir* votedir*))
+  (= scrape-flagger* (sym (or (let cfg (load-scrape-config) cfg!username)
+                              "hnscraper")))
+  ; news's `(flagged i)` requires `(len> i!flags many-flags*)`.  With
+  ; many-flags* = 1 (the default), two flaggers are needed.  Since the
+  ; scraper account is our only flagger, drop the threshold to 0 so a
+  ; single flag is enough.
+  (= many-flags* 0)
   (let ranked nil
     ; users first (so items have authors)
     (each f (dir scrape-user-dir*)
@@ -661,6 +675,13 @@
       (save-item it)
       it)))
 
+; news's (flagged i) requires (len> i!flags many-flags*).  We're the
+; only flagger we know about, so we record the scraper username
+; (many-flags* + 1) times -- enough to clear the threshold regardless
+; of what many-flags* happens to be set to.
+(def scrape-flag-list ()
+  (n-of (+ (or many-flags* 1) 1) scrape-flagger*))
+
 (def import-scraped-comment (c)
   (let id c!id
     (let it (or (items* id)
@@ -672,12 +693,17 @@
                          'time (or c!time (seconds))
                          'text c!text
                          'parent c!parent
-                         'dead  (or c!dead c!flagged)
+                         'dead  c!dead
+                         'flags (if c!flagged (scrape-flag-list) nil)
                          'deleted c!deleted)))
       (when (> id maxid*) (= maxid* id))
-      (= it!text   (or c!text   it!text))
-      (= it!by     (or c!by     it!by))
-      (= it!dead   (or c!dead c!flagged it!dead))
+      (= it!text (or c!text it!text))
+      (= it!by   (or c!by   it!by))
+      (= it!dead (or c!dead it!dead))
+      ; if newly observed as [flagged] and the scraper isn't already
+      ; on the flag list, install the (many-flags* + 1)-long marker.
+      (when (and c!flagged (no (mem scrape-flagger* it!flags)))
+        (= it!flags (scrape-flag-list)))
       (save-item it)
       it)))
 
