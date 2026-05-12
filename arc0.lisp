@@ -666,6 +666,15 @@
                        :output :stream :wait nil
                        :external-format :latin-1)))
 
+(xdef getenv (name &optional default)
+  ;; treat both "unset" and "set-but-empty" as missing, matching
+  ;; shell's ${VAR:-default}.  callers who really need to tell the
+  ;; two cases apart can use sb-ext:posix-getenv directly.
+  (let ((v (sb-ext:posix-getenv name)))
+    (if (or (null v) (string= v ""))
+        default
+        v)))
+
 ;;;; ============================================================
 ;;;; Tables / hash tables
 ;;;; ============================================================

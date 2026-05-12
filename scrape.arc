@@ -87,26 +87,123 @@
             (list url))))
 
 
+; ----- Scraper config (username + optional password) -----
+;
+; `scrape.json` is gitignored.  On first run we copy
+; `scrape.example.json` (committed, username only) into place.  The
+; user may add a `"password":...` field manually; if they don't, we
+; prompt at first login and save it back.  Password resolution order
+; is: HN_SCRAPER_PASSWORD env var > scrape.json > prompt.
+
+(= scrape-config*  "scrape.json"
+   scrape-example* "scrape.example.json")
+
+(def load-scrape-config ()
+  (unless (file-exists scrape-config*)
+    (when (file-exists scrape-example*)
+      (system (+ "cp " (shellquote scrape-example*) " "
+                       (shellquote scrape-config*)))))
+  (or (and (file-exists scrape-config*) (load-json scrape-config*))
+      (obj username "hnscraper")))
+
+(def save-scrape-config (cfg)
+  (save-json cfg scrape-config*))
+
+
+; ----- Password prompt (no-echo on TTYs) -----
+
+(def stdin-is-tty? ()
+  ; sh's `test -t 0` returns success iff stdin is a terminal.
+  (is "yes"
+      (errsafe (allchars (pipe-from "test -t 0 && printf yes")))))
+
+(def read-password-noecho ()
+  ; turn echo off around (readline) so the password doesn't print.
+  ; the `after` makes sure we restore echo even on Ctrl-C / errors.
+  (after (do (system "stty -echo 2>/dev/null") (readline))
+         (system "stty echo 2>/dev/null")
+         (prn)))
+
+(def prompt-password (user)
+  (unless (stdin-is-tty?)
+    (err (+ "no terminal: set HN_SCRAPER_PASSWORD in env or "
+            "add \"password\" to " scrape-config*)))
+  (pr "HN password for " user ": ") (flushout)
+  (read-password-noecho))
+
+(def resolve-password (cfg)
+  ; returns (pw source) where source is 'env, 'config, or 'prompt.
+  ; nil if no password could be obtained (and no terminal to prompt).
+  (or (whenlet pw (getenv "HN_SCRAPER_PASSWORD") (list pw 'env))
+      (whenlet pw cfg!password                  (list pw 'config))
+      (whenlet pw (prompt-password (or cfg!username "hnscraper"))
+        (and (~empty pw) (list pw 'prompt)))))
+
+
+; ----- Pre-baked cookie support -----
+;
+; If the user supplies HN_SCRAPER_COOKIE in the environment or a
+; "cookie" field in scrape.json, we skip the login dance and just
+; write the cookie value into curl's Netscape jar.  Format is the
+; raw "username&token" string HN's `user` cookie carries (copy it
+; from your browser's devtools).
+
+(def write-cookie-file (value)
+  ; Netscape cookie jar line; tabs between fields.
+  ;   #HttpOnly_news.ycombinator.com  FALSE  /  TRUE  <expiry>  user  <value>
+  ; HN's own cookies expire at 2147368447 (~year 2038), so we copy that.
+  (let line (apply + (intersperse #\tab
+              (list "#HttpOnly_news.ycombinator.com"
+                    "FALSE" "/" "TRUE" "2147368447" "user" value)))
+    (writefile-raw (+ "# Netscape HTTP Cookie File\n" line "\n")
+                   scrape-cookies*)))
+
+(def seed-cookie-from-config! (cfg)
+  ; if env or cfg has a cookie value, install it into the jar.
+  ; returns t if a cookie was installed.
+  (whenlet c (getenv "HN_SCRAPER_COOKIE" cfg!cookie)
+    (write-cookie-file c)
+    t))
+
+
 ; ----- Login -----
 
-(def hn-logged-in? ()
-  ; quick check: fetch /news, look for "user?id=hnscraper" link
-  (aif (curl-get (+ scrape-hn-host* "/news"))
-       (and (posmatch "user?id=hnscraper" it) t)))
+(def hn-logged-in? ((o user))
+  ; quick check: fetch /news, look for the user?id=<user> link.
+  (let u (or user (let cfg (load-scrape-config) cfg!username) "hnscraper")
+    (aif (curl-get (+ scrape-hn-host* "/news"))
+         (and (posmatch (+ "user?id=" u) it) t))))
 
-(def hn-login ((o user "hnscraper") (o pw "hnscraperpassword"))
-  (prn "login: " user)
-  (curl-post-form (+ scrape-hn-host* "/login")
-                  (list (list "acct" user)
-                        (list "pw"   pw)
-                        (list "goto" "news")))
-  (let ok (hn-logged-in?)
-    (prn "  -> " (if ok "logged in" "FAILED"))
-    ok))
+(def hn-login ((o user) (o pw))
+  (with (cfg (load-scrape-config) u user p pw source nil)
+    (= u (or u cfg!username (err "no username in scrape.json")))
+    (unless p
+      (let resolved (resolve-password cfg)
+        (unless resolved (err "no password supplied"))
+        (= p      (car resolved)
+           source (cadr resolved))))
+    (prn "login: " u)
+    (curl-post-form (+ scrape-hn-host* "/login")
+                    (list (list "acct" u)
+                          (list "pw"   p)
+                          (list "goto" "news")))
+    (let ok (hn-logged-in? u)
+      (prn "  -> " (if ok "logged in" "FAILED"))
+      ; only persist a prompted password if the login actually worked
+      (when (and ok (is source 'prompt))
+        (= cfg!password p)
+        (save-scrape-config cfg)
+        (prn "  password saved to " scrape-config*))
+      ok)))
 
 (def ensure-login ()
-  (or (and (file-exists scrape-cookies*) (hn-logged-in?))
-      (hn-login)))
+  ; Order: (1) existing valid cookie jar, (2) cookie supplied via env
+  ; or scrape.json, (3) password login.
+  (let cfg (load-scrape-config)
+    (or (and (file-exists scrape-cookies*) (hn-logged-in? cfg!username))
+        (and (seed-cookie-from-config! cfg)
+             (hn-logged-in? cfg!username))
+        (hn-login))))
 
 
 ; ----- HTML helpers -----

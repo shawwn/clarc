@@ -115,21 +115,46 @@ arc> (scrape! t 5)       ; same, force-refetch
 
 # Login
 
-Credentials are baked into `hn-login` as defaults:
+Credentials live in `scrape.json` at the repo root.  It's gitignored;
+on first run it's copied from the committed `scrape.example.json`
+template (which contains only the username).
 
-```
-username: hnscraper
-password: hnscraperpassword
-```
+Auth resolution, in order:
+
+1. **Existing valid cookie jar** (`arc/scrape/cookies.txt`).  If a
+   prior session left a working cookie, nothing else runs.
+2. **Pre-baked cookie** from `HN_SCRAPER_COOKIE` env var or
+   `"cookie"` field in `scrape.json`.  Value is the raw
+   `<username>&<token>` string -- copy it from your browser's
+   devtools (Application → Cookies → news.ycombinator.com → `user`).
+   This skips the password login entirely.
+3. **Password login**:
+   1. `HN_SCRAPER_PASSWORD` env var (preferred for CI / non-interactive)
+   2. `"password"` field in `scrape.json`
+   3. Interactive no-echo prompt, if stdin is a TTY
+
+If the prompt path is taken and login succeeds, the password is
+written back to `scrape.json` so subsequent runs skip the prompt.
+A typo'd password is *not* saved.  Env-supplied passwords and
+cookies are never persisted.
 
 The account's About page invites contact (shawnpresser@gmail.com) if
 the scrape is too aggressive.
 
-To re-login (e.g. if the cookie is stale):
+To force a re-login:
 
 ```
 arc> (hn-login)
 ```
+
+Or override credentials explicitly:
+
+```
+arc> (hn-login "other-user" "their-password")
+```
+
+**Don't commit `scrape.json` if it contains a password.**  The
+`.gitignore` already lists it, but double-check before pushing.
 
 # Crawl delay
 
