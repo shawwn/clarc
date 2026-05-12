@@ -50,6 +50,22 @@ initial set of users.
 
 Change the variables at the top of `news.arc`.
 
+## Importing HN's front page
+
+There's a built-in scraper that fetches the current Hacker News front
+page (and its comment trees, including flagged / dead / collapsed
+comments the official API doesn't expose) and imports it into your
+local News.  See [`scrape.md`](scrape.md) for the full how-to.
+
+You'll need a Hacker News account to log in to HN with -- the scraper
+needs a session to see flagged/dead content.  An ordinary user account
+is fine, but **create a fresh one for this purpose** rather than using
+your real account, and turn `showdead` on in its preferences (so the
+HTML the scraper fetches includes dead comments).  Put the username
+into `scrape.json` (copied from `scrape.example.json` on first run);
+the password is read at login time from `HN_SCRAPER_PASSWORD`, the
+`password` field of `scrape.json`, or an interactive prompt.
+
 ## Performance tuning
 
 ```arc
@@ -73,6 +89,8 @@ Change the variables at the top of `news.arc`.
   `pprint.arc`, `srv.arc`, `app.arc`, `prompt.arc` — Arc itself,
   built on top of `arc0`
 - `news.arc`, `blog.arc` — the News and Blog applications
+- `scrape.arc`, `json.arc` — HN front-page scraper and JSON support
+  (see [`scrape.md`](scrape.md))
 - `static/` — static assets served by `srv.arc`
 - `test.arc` — Arc test suite
 
