@@ -588,5 +588,72 @@ c"
          ((fn ((:a :b) (:c :d)) (list a b c d))
           (obj a 1 b 2) (obj c 3 d 4))))
 
+(load "json.arc")
+
+(define-test json-encode-primitives
+  (test? "null"  (tostring (to-json nil)))
+  (test? "true"  (tostring (to-json t)))
+  (test? "0"     (tostring (to-json 0)))
+  (test? "42"    (tostring (to-json 42)))
+  (test? "-7"    (tostring (to-json -7)))
+  (test? "\"hi\"" (tostring (to-json "hi")))
+  (test? "\"x\"" (tostring (to-json #\x)))
+  (test? "\"sym\"" (tostring (to-json 'sym))))
+
+(define-test json-encode-escapes
+  (test? "\"a\\\"b\""           (tostring (to-json "a\"b")))
+  (test? "\"a\\\\b\""           (tostring (to-json "a\\b")))
+  (test? "\"a\\nb\""            (tostring (to-json "a\nb")))
+  (test? "\"a\\tb\""            (tostring (to-json "a\tb")))
+  (test? "\"\\u0001\""          (tostring (to-json (string (coerce 1 'char))))))
+
+(define-test json-encode-array
+  ; nil encodes as JSON null, not [] (Arc conflates nil + empty list)
+  (test? "[1,2,3]"   (tostring (to-json '(1 2 3))))
+  (test? "[\"a\",\"b\"]" (tostring (to-json '("a" "b"))))
+  (test? "[1,[2,3]]" (tostring (to-json '(1 (2 3))))))
+
+(define-test json-encode-object
+  (test? "{}"                  (tostring (to-json (table))))
+  (test? "{\"a\":1}"           (tostring (to-json (obj a 1))))
+  ; keys are sorted lexicographically for determinism
+  (test? "{\"a\":1,\"b\":2}"   (tostring (to-json (obj b 2 a 1))))
+  (test? "{\"nest\":[1,2]}"    (tostring (to-json (obj nest '(1 2))))))
+
+(define-test json-decode-primitives
+  (test? nil   (from-json "null"))
+  (test? t     (from-json "true"))
+  (test? nil   (from-json "false"))
+  (test? 42    (from-json "42"))
+  (test? -7    (from-json "-7"))
+  (test? "hi"  (from-json "\"hi\"")))
+
+(define-test json-decode-escapes
+  (test? "a\"b"   (from-json "\"a\\\"b\""))
+  (test? "a\\b"   (from-json "\"a\\\\b\""))
+  (test? "a/b"   (from-json "\"a\\/b\""))
+  (test? "a\nb"   (from-json "\"a\\nb\""))
+  (test? "a\tb"   (from-json "\"a\\tb\""))
+  (test? "A"      (from-json "\"\\u0041\"")))
+
+(define-test json-decode-array
+  (test? nil       (from-json "[]"))
+  (test? '(1 2 3)  (from-json "[1,2,3]"))
+  (test? '(1 (2 3) "x")  (from-json "[1,[2,3],\"x\"]"))
+  ; whitespace
+  (test? '(1 2)    (from-json "[ 1 , 2 ]")))
+
+(define-test json-decode-object
+  (let h (from-json "{\"a\":1,\"b\":\"two\"}")
+    (test? 1     h!a)
+    (test? "two" h!b))
+  (let h (from-json "{}")
+    (test? 0 (len (keys h)))))
+
+(define-test json-roundtrip
+  (let h (from-json "{\"id\":\"pg\",\"karma\":157316,\"about\":\"hi\",\"submitted\":[1,2,3],\"flag\":true}")
+    (test? "{\"about\":\"hi\",\"flag\":true,\"id\":\"pg\",\"karma\":157316,\"submitted\":[1,2,3]}"
+           (tostring (to-json h)))))
+
 (when (main)
   (run-tests))

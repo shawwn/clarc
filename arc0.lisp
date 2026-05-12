@@ -657,9 +657,14 @@
   nil)
 
 (xdef pipe-from (cmd)
+  ;; :external-format :latin-1 so each byte from the subprocess becomes
+  ;; one Arc char.  Matches the file I/O defaults (see infile/outfile)
+  ;; and keeps UTF-8 subprocess output round-trippable through Latin-1
+  ;; files (each byte preserved literally).
   (sb-ext:process-output
    (sb-ext:run-program "/bin/sh" (list "-c" cmd)
-                       :output :stream :wait nil)))
+                       :output :stream :wait nil
+                       :external-format :latin-1)))
 
 ;;;; ============================================================
 ;;;; Tables / hash tables
