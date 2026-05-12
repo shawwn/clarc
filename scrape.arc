@@ -623,11 +623,24 @@
 ; `import-scraped-comment`.
 (= scrape-flagger* 'hnscraper)
 
+; Shared dev password installed on every imported user that has no
+; entry in hpasswords*.  Read from scrape.json's "dev-password" field,
+; defaults to "password".  Set this to nil/empty in scrape.json to skip
+; password installation entirely.
+(= scrape-dev-password* "password")
+
 (def import-scrape! ()
   (map ensure-dir (list scrape-dir* scrape-item-dir* scrape-user-dir*
                         arcdir* newsdir* storydir* profdir* votedir*))
-  (= scrape-flagger* (sym (or (let cfg (load-scrape-config) cfg!username)
-                              "hnscraper")))
+  ; hpasswords*/admins*/cookie->user* are populated by load-userinfo,
+  ; which normally only runs from (asv).  If the caller hasn't started
+  ; the server yet we'd hit "Unbound variable: hpasswords*" when
+  ; installing dev passwords below.
+  (load-userinfo)
+  (with (cfg (load-scrape-config))
+    (= scrape-flagger* (sym (or cfg!username "hnscraper")))
+    (when (isa cfg!dev-password 'string)
+      (= scrape-dev-password* cfg!dev-password)))
   ; news's `(flagged i)` requires `(len> i!flags many-flags*)`.  With
   ; many-flags* = 1 (the default), two flaggers are needed.  Since the
   ; scraper account is our only flagger, drop the threshold to 0 so a
@@ -655,6 +668,10 @@
     ; walks down by 1 from maxid*; with HN ids in the tens of millions
     ; that's catastrophic).
     (save-topstories)
+    ; import-scraped-user staged any newly-set passwords in hpasswords*
+    ; without writing -- flush once now (set-pw saves per call, which
+    ; would be O(n^2) over a 1000-user import).
+    (save-table hpasswords* hpwfile*)
     (prn "imported " (len ranked) " stories")))
 
 
@@ -771,4 +788,13 @@
         (when u!karma (= p!karma u!karma))
         (when u!about (= p!about u!about))
         (save-prof id)
+        ; Install the dev password so you can log in as imported
+        ; users locally.  Only set if hpasswords* doesn't already
+        ; have an entry (don't clobber a real password if one was
+        ; set via the web UI later).  Skip entirely if dev-password
+        ; is nil/empty.
+        (when (and scrape-dev-password*
+                   (~empty scrape-dev-password*)
+                   (no (hpasswords* id)))
+          (= (hpasswords* id) (shash scrape-dev-password*)))
         p))))

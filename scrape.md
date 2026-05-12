@@ -156,6 +156,25 @@ arc> (hn-login "other-user" "their-password")
 **Don't commit `scrape.json` if it contains a password.**  The
 `.gitignore` already lists it, but double-check before pushing.
 
+# Logging in as imported users
+
+After `(import-scrape!)`, every imported HN user has a password set
+to `"password"` -- so you can log in to your local mirror as any of
+them and see things from their perspective.
+
+The shared dev password comes from `scrape-dev-password*`, which
+defaults to `"password"`.  Override by adding a `"dev-password":
+"..."` field to `scrape.json`.  Set it to `null` or the empty string
+to skip password installation entirely.
+
+Caveats:
+
+- Only set when the user has no existing `hpasswords*` entry -- a
+  real password (e.g. one set via `/login` in the local UI) is never
+  clobbered.
+- Don't expose this server beyond localhost; every imported account
+  is one guessable string away.
+
 # Crawl delay
 
 `scrape-crawl-delay*` is set to 3 seconds.  HN's `robots.txt`
