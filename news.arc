@@ -986,7 +986,6 @@ function vote(node) {
     (if (cansee s)
         (do (deadmark s)
             (titlelink s url)
-            (pdflink url)
             (awhen (sitename url)
               (spanclass comhead
                 (pr " (" )
@@ -1016,16 +1015,6 @@ function vote(node) {
             rel  (unless (or toself (> (realscore s) follow-threshold*))
                    'nofollow)) 
       (pr s!title))))
-
-(def pdflink (url)
-  (awhen (vacuumize url)
-    (pr " [") 
-    (link "scribd" it)
-    (pr "]")))
-
-(defmemo vacuumize (url)
-  (and (or (endmatch ".pdf" url) (endmatch ".PDF" url))
-       (+ "http://www.scribd.com/vacuum?url=" url)))
       
 (def pseudo-text (i)
   (if i!deleted "[deleted]" "[dead]"))
