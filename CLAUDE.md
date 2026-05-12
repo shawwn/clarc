@@ -21,3 +21,5 @@ you can use arc's `whenlet`:
   ...)
 ```
 
+Use + to join lists together. E.g. `(+ '(a b c) '(d e f))` gives `(a b c d e f)`
+
