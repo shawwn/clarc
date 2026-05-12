@@ -721,6 +721,14 @@
       ; on the flag list, install the (many-flags* + 1)-long marker.
       (when (and c!flagged (no (mem scrape-flagger* it!flags)))
         (= it!flags (scrape-flag-list)))
+      ; link this comment under its parent's kids list.  Without this
+      ; an item page renders the story but no comments -- news.arc's
+      ; display-subcomments walks parent!kids, not (keep [is _!parent
+      ; parent-id] all-items).
+      (whenlet p (and c!parent (items* c!parent))
+        (unless (mem id p!kids)
+          (= p!kids (+ p!kids (list id)))
+          (save-item p)))
       (save-item it)
       it)))
 
