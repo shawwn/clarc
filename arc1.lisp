@@ -658,6 +658,10 @@ isn't shadowed by a lexical binding."
   (cond
     ((or (null args) (arc-sym= args "nil")) nil)
     ((symbolp args) nil)
+    ((and (consp args)
+          (or (and (consp (car args)) (ac-table-pattern-p (car args)))
+              (ac-table-pattern-p (car args))))
+     t)
     ((and (consp args) (symbolp (car args))) (ac-complex-args-p (cdr args)))
     (t t)))
 
@@ -673,7 +677,13 @@ isn't shadowed by a lexical binding."
     ((or (null args) (arc-sym= args "nil")) nil)
     ((symbolp args) (list (list args ra)))
     ((consp args)
-     (let* ((x (cond
+     (let* ((slot-ra (if is-params `(car ,ra) `(arc-xcar ,ra)))
+            (x (cond
+                 ;; positional slot is a table-destructuring pattern
+                 ;; (checked before (o ...) since `(o :keyword ...)` is a
+                 ;; table entry, not a positional optional)
+                 ((and (consp (car args)) (ac-table-pattern-p (car args)))
+                  (ac-table-args (car args) env slot-ra))
                  ((and (consp (car args)) (arc-sym= (caar args) "o"))
                   (ac-complex-opt (cadar args)
                                   (if (consp (cddar args)) (caddar args) nil)
@@ -690,10 +700,7 @@ isn't shadowed by a lexical binding."
                                     (list (intern "the" (sym-pkg (caar args)))
                                           key)
                                     env ra)))
-                 (t (ac-complex-args
-                     (car args) env
-                     (if is-params `(car ,ra) `(arc-xcar ,ra))
-                     nil))))
+                 (t (ac-complex-args (car args) env slot-ra nil))))
             (xa (ac-complex-getargs x)))
        (append x (ac-complex-args (cdr args)
                                   (append xa env)
@@ -703,6 +710,91 @@ isn't shadowed by a lexical binding."
 
 (defun ac-complex-opt (var expr env ra)
   (list (list var `(if (consp ,ra) (car ,ra) ,(ac expr env)))))
+
+;;; Table destructuring: (:a :b :c) at a param position binds locals
+;;; a, b, c to the corresponding table entries.  Sub-forms supported:
+;;;   :k              -- bind k to (tbl 'k)
+;;;   :k var          -- remap: bind var to (tbl 'k)
+;;;   :k pat          -- nested: destructure (tbl 'k) by pat
+;;;   (o :k default)  -- bind k to (tbl 'k default)
+;;;   (o :k var default) -- remap with default
+;;; Both :foo and foo: read as the same CL keyword, so either spelling
+;;; works on the key side.
+
+(defun ac-table-opt-form-p (x)
+  (and (consp x) (arc-sym= (car x) "o")
+       (consp (cdr x)) (keywordp (cadr x))))
+
+(defun ac-table-pattern-p (pat)
+  "True if PAT is a table-destructuring pattern: a non-empty list whose
+   first element is a keyword or (o :keyword ...) form."
+  (and (consp pat)
+       (or (keywordp (car pat))
+           (ac-table-opt-form-p (car pat)))))
+
+(defun ac-keyword->arc-sym (kw)
+  "Convert a CL keyword like :A to the arc symbol arc::a used as a
+   table key by `obj`."
+  (arc-sym kw))
+
+(defun ac-table-args (pat env ra)
+  "Generate let* bindings that destructure RA as a table according to
+   the keyword pattern PAT."
+  (let ((tbl (gensym "TBL")))
+    (cons (list tbl ra)
+          (ac-table-args-loop pat env tbl))))
+
+(defun ac-table-args-loop (pat env tbl)
+  (cond
+    ((null pat) nil)
+    ((keywordp (car pat))
+     (let* ((key-sym (ac-keyword->arc-sym (car pat)))
+            (rest    (cdr pat))
+            (next    (and (consp rest) (car rest)))
+            ;; A non-keyword, non-(o ...) element after a keyword is the
+            ;; bind target (a symbol for remap, or a sub-pattern list).
+            (has-target (and (consp rest)
+                             (not (keywordp next))
+                             (not (ac-table-opt-form-p next)))))
+       (if has-target
+           (append (ac-table-slot key-sym next nil env tbl)
+                   (ac-table-args-loop (cdr rest) env tbl))
+           (append (ac-table-slot key-sym key-sym nil env tbl)
+                   (ac-table-args-loop rest env tbl)))))
+    ((ac-table-opt-form-p (car pat))
+     ;; (o :k)         -- bind k to (tbl 'k), no default
+     ;; (o :k default) -- bind k with default if absent
+     (let* ((entry   (car pat))
+            (key-sym (ac-keyword->arc-sym (cadr entry)))
+            (default (if (consp (cddr entry)) (caddr entry) nil)))
+       (append (ac-table-slot key-sym key-sym default env tbl)
+               (ac-table-args-loop (cdr pat) env tbl))))
+    (t (error "Bad table-destructure element: ~S" (car pat)))))
+
+(defun ac-table-lookup (tbl key-sym default env)
+  "CL expression that fetches KEY-SYM from TBL.  If DEFAULT is given,
+   it's an arc expression evaluated lazily when the key is missing."
+  (if default
+      (let ((v (gensym "V")))
+        `(let ((,v (gethash ',key-sym ,tbl :arc/missing)))
+           (if (eq ,v :arc/missing) ,(ac default env) ,v)))
+      `(arc-call1 ,tbl ',key-sym)))
+
+(defun ac-table-slot (key-sym target default env tbl)
+  "Bindings for one table slot: key KEY-SYM, value bound according to
+   TARGET (a symbol or sub-pattern), with optional DEFAULT expression
+   used lazily when the key is missing.  Sub-patterns dispatch back
+   through ac-complex-args."
+  (cond
+    ((symbolp target)
+     (list (list target (ac-table-lookup tbl key-sym default env))))
+    ((consp target)
+     (let ((val (gensym "VAL")))
+       (cons (list val (ac-table-lookup tbl key-sym default env))
+             (if (ac-table-pattern-p target)
+                 (ac-table-args target env val)
+                 (ac-complex-args target env val nil)))))
+    (t (error "Bad table-destructure target: ~S" target))))
 
 (defun ac-complex-getargs (a) (mapcar #'car a))
 

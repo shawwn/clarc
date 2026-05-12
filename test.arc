@@ -546,5 +546,47 @@ c"
                                   (list 'foo (list 'unsyntax-splicing
                                                    ''(1 2))))))))
 
+(define-test table-destructure
+  ;; basic: (:a :b :c) binds locals a, b, c by table lookup.
+  (test? '(1 2 3)
+         ((fn ((:a :b :c)) (list a b c))
+          (obj a 1 b 2 c 3)))
+  ;; missing keys yield nil.
+  (test? '(1 nil 3)
+         ((fn ((:a :b :c)) (list a b c))
+          (obj a 1 c 3)))
+  ;; (o :k default) supplies a default when the key is absent.
+  (test? '(1 2 42)
+         ((fn ((:a :b (o :c 42))) (list a b c))
+          (obj a 1 b 2)))
+  (test? '(1 2 3)
+         ((fn ((:a :b (o :c 42))) (list a b c))
+          (obj a 1 b 2 c 3)))
+  ;; defaults are lazily evaluated (only when missing).
+  (let count* 0
+    ((fn (((o :x (do (++ count*) 99)))) x)
+     (obj x 7))
+    (test? 0 count*))
+  ;; foo: and :foo both denote the key foo (reader produces :FOO).
+  (test? '(1 2)
+         ((fn ((a: :b)) (list a b))
+          (obj a 1 b 2)))
+  ;; remap: keyword followed by a symbol uses the symbol as the local.
+  (test? '(7 8 9)
+         ((fn ((foo: x bar: y :baz)) (list x y baz))
+          (obj foo 7 bar 8 baz 9)))
+  ;; nested table destructuring: keyword + sub-pattern.
+  (test? '(10 20)
+         ((fn ((:outer (:x :y))) (list x y))
+          (obj outer (obj x 10 y 20))))
+  ;; table pattern interleaved with positional args.
+  (test? '(99 1 2)
+         ((fn (n (:a :b)) (list n a b))
+          99 (obj a 1 b 2)))
+  ;; two table patterns at distinct positional slots.
+  (test? '(1 2 3 4)
+         ((fn ((:a :b) (:c :d)) (list a b c d))
+          (obj a 1 b 2) (obj c 3 d 4))))
+
 (when (main)
   (run-tests))
