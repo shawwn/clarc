@@ -3,6 +3,8 @@
 An Arc-to-Common-Lisp port of [Arc](http://arclanguage.org/) and the
 News web app that powers [Hacker News](https://news.ycombinator.com).
 
+<img width="751" height="540" alt="image" src="https://github.com/user-attachments/assets/85828774-02bc-4c0b-9915-082b4c66b413" />
+
 In September 2024, Hacker News migrated from Arc-on-Racket to Arc on
 [SBCL](http://www.sbcl.org/) using a compiler called *Clarc* (with a
 `c`) that dang had been developing for years. The port lets HN run on multiple cores
