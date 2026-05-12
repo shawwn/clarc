@@ -39,6 +39,9 @@
    ; the About page invites contact if it's too aggressive.  Keep this
    ; conservative; revert to 30 if HN ops asks.
    scrape-crawl-delay*  3
+   ; max parallel curl subprocesses for the user API.  Firebase has no
+   ; advertised rate limit; 10 is comfortable.
+   scrape-user-concurrency* 10
    scrape-hn-host*      "https://news.ycombinator.com"
    scrape-api-host*     "https://hacker-news.firebaseio.com/v0")
 
@@ -396,16 +399,88 @@
 
 
 ; ----- User scrape -----
+;
+; We deliberately avoid parsing+reserialising the firebase response.
+; from-json on a 100KB user object (long `submitted` array) is ~0.4s
+; per call in pure Arc, and parsing concurrently in many threads
+; thrashes the allocator/GC.  Instead, save the raw response verbatim
+; and inject `fetched_at` with a tiny string surgery on the trailing
+; `}`.
 
 (def scrape-user! (id (o force))
-  (if (and (no force) (recently-fetched? (sym (+ "u/" id))))
-      (load-json (+ scrape-user-dir* id ".json"))
-      (let user (fetch-user id)
-        (when user
-          (= user!fetched_at (seconds))
-          (save-json user (+ scrape-user-dir* id ".json"))
-          (= (scrape-last-fetch* (sym (+ "u/" id))) (seconds))
-          user))))
+  (when (or force (no (recently-fetched? (sym (+ "u/" id)))))
+    (let raw (curl-get-public (+ scrape-api-host* "/user/" id ".json"))
+      (when (and raw (>= (len raw) 2))
+        (writefile-raw (inject-fetched-at raw (seconds))
+                       (+ scrape-user-dir* id ".json"))
+        (= (scrape-last-fetch* (sym (+ "u/" id))) (seconds))
+        t))))
+
+(def writefile-raw (s path)
+  (let tmp (+ path ".tmp")
+    (w/outfile o tmp (disp s o))
+    (mvfile tmp path)))
+
+(def inject-fetched-at (raw t)
+  ; raw is a JSON object string (firebase response).  Insert
+  ; ,"fetched_at":<t> just before the trailing `}`.  No-op if the
+  ; response doesn't look like a JSON object.  We avoid `trim`
+  ; because copying a 100KB string per call wrecks throughput when
+  ; many threads run this concurrently; instead, scan back from the
+  ; end for the closing brace.
+  (let n (len raw)
+    (with (i (- n 1))
+      (while (and (>= i 0) (whitec (raw i))) (-- i))
+      (if (and (>= i 1) (is (raw i) #\}))
+          (+ (cut raw 0 i)
+             (if (is (raw (- i 1)) #\{) "" ",")
+             "\"fetched_at\":" (string t) "}")
+          raw))))
+
+
+; ----- Bounded-parallel user scrape -----
+;
+; Fire N curls in parallel inside a single shell (`curl ... & ... &
+; wait`).  Going through Arc threads + SBCL `run-program` per-curl is
+; ~15x slower than native shell job control because each `run-program`
+; call has measurable per-process overhead; one wrapping shell hides
+; all of that.
+
+(def scrape-users-parallel! (users (o force) (o batch-size scrape-user-concurrency*))
+  (let pending (if force users
+                   (rem [recently-fetched? (sym (+ "u/" _))] users))
+    (with (total (len pending) done 0)
+      (each batch (tuples pending batch-size)
+        (scrape-user-batch! batch)
+        (= done (+ done (len batch)))
+        (when (is 0 (mod done (max 1 (* batch-size 5))))
+          (prn "  users " done "/" total)
+          (flushout))))))
+
+(def scrape-user-batch! (ids)
+  ; build a single shell command that backgrounds one `curl` per id
+  ; and waits for them all.
+  (let cmd
+       (apply + (intersperse " "
+                  (+ (map (fn (id)
+                            (+ "curl -fsS --connect-timeout 20 --max-time 60 "
+                               (shellquote (+ scrape-api-host* "/user/" id ".json"))
+                               " -o "
+                               (shellquote (+ scrape-user-dir* id ".json.raw"))
+                               " &"))
+                          ids)
+                     '("wait"))))
+    (system cmd)
+    (let now (seconds)
+      (each id ids
+        (let raw-path (+ scrape-user-dir* id ".json.raw")
+          (when (file-exists raw-path)
+            (let raw (errsafe:filechars raw-path)
+              (when (and raw (>= (len raw) 2))
+                (writefile-raw (inject-fetched-at raw now)
+                               (+ scrape-user-dir* id ".json"))
+                (= (scrape-last-fetch* (sym (+ "u/" id))) now)))
+            (errsafe:rmfile raw-path)))))))
 
 
 ; ----- Top-level entry -----
@@ -430,9 +505,9 @@
     (each id ids
       (scrape-item! id force))
     (save-fetchlog)
-    (prn "scraping " (len (keys scrape-users-to-fetch*)) " users")
-    (noisy-each 10 u (keys scrape-users-to-fetch*)
-      (scrape-user! u force))
+    (prn "scraping " (len (keys scrape-users-to-fetch*)) " users "
+         "(" scrape-user-concurrency* "-way parallel)")
+    (scrape-users-parallel! (keys scrape-users-to-fetch*) force)
     (save-fetchlog)
     (prn "done.")))
 
