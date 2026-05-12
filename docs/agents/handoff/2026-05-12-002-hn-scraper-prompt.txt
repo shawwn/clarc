@@ -1,0 +1,38 @@
+Come up with a way of loading items and users from the real Hacker News. Ideally it would load the first two pages of HN somehow. (So it would fetch the current front page and second-page, then for each item, import the item, which imports all comments, which imports all users. If users already exist, they're updated to match the current HN user.)
+
+Note that the HN API doesn't give information about whether a comment
+is marked dead, or whether it's collapsed, or flagged, or killed. I
+think we'd want to come up with a way to scrape the front page
+ourselves, and export each item and user to a json file. It should
+respect the crawl-delay in https://news.ycombinator.com/robots.txt.
+It'd be a nice exercise to write it in Arc. Feel free to extend Arc as
+needed.
+
+I created you a scraper account you can use:
+
+username: hnscraper
+password: hnscraperpassword
+
+I've logged in, but I'm not sure how to view cookies in devtools to
+get you the cookie value. It'd be ideal if you could log in and obtain
+a cookie yourself.
+
+The profile's About page says:
+
+"This is an account to fetch content not available via the HN API, e.g. flagged/dead/collapsed comments and submissions. If this scraper is too aggressive, please consider contacting shawnpresser@gmail.com to tone it down rather than banning it outright."
+
+Feel free to give thoughts or feedback on this.
+
+An example of a [flagged][dead] comment is here: https://news.ycombinator.com/item?id=48106273 (context: https://news.ycombinator.com/item?id=48085993#48106273)
+
+An example of a [dead] comment is here: https://news.ycombinator.com/item?id=48105810 (context: https://news.ycombinator.com/item?id=48038191#48105810)
+
+An example of a [flagged][dead][collapsed] comment is here: https://news.ycombinator.com/item?id=48092598 (context: https://news.ycombinator.com/item?id=48086190#48092598)
+
+An example of a [collapsed] live comment is here: https://news.ycombinator.com/item?id=48085067 (context: https://news.ycombinator.com/item?id=48073201#48085067)
+
+All of these should be parseable from their context links. I.e. when
+crawling, you should only crawl the front page and the comments of
+each story. No need to visit comments directly. Use the official HN
+API to crawl user profiles for speed.
+

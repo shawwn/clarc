@@ -401,7 +401,7 @@ even 1000+ comments render in one document.
 
 ## Concrete reference comments
 
-The task prompt (`docs/agents/prompt.txt`) names four comments, one
+The task prompt (`docs/agents/handoff/2026-05-12-002-hn-scraper-prompt.txt`) names four comments, one
 per status combination, to use as a parseable smoke-test set.  Each
 appears two ways: a **permalink** (just the comment, no thread
 context) and a **context link** (the full item page with that comment
