@@ -175,13 +175,13 @@ different host, `hacker-news.firebaseio.com`).
 
 # Verifying status detection
 
-`arc/scrape/verify-flags.arc` re-fetches the 4 comment examples from
+`scrape-verify-flags.arc` re-fetches the 4 comment examples from
 `docs/agents/prompt.txt` and asserts each has the expected flag
 combination.  Useful sanity check if you suspect HN's markup has
 shifted:
 
 ```sh
-./sharc arc/scrape/verify-flags.arc
+./sharc scrape-verify-flags.arc
 ```
 
 Expected output:

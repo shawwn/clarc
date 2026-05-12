@@ -460,10 +460,10 @@ HN's front-page user would see it, with all status markers in place.
 
 ### Verification script
 
-`arc/scrape/verify-flags.arc` re-fetches the four context items at
+`scrape-verify-flags.arc` re-fetches the four context items at
 the configured crawl-delay, parses each, and asserts the named
 comment has the expected `dead`/`flagged`/`collapsed` triple.  Run
-it with `./sharc arc/scrape/verify-flags.arc` -- a passing run looks
+it with `./sharc scrape-verify-flags.arc` -- a passing run looks
 like:
 
 ```
