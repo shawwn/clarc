@@ -82,4 +82,44 @@ from an Nginx cache in front).
 
 This snapshot is about to be invalidated by a re-scrape (the source
 thread is now at 979 comments / 879 points).  Re-measured numbers
-will go under their own entry below.
+go under the next entry below.
+
+---
+
+## 2026-05-13 -- same item, re-scraped at 934 comments
+
+**Page:** local mirror of `item?id=48100433`, after re-scraping
+(883 points, 934 comments at scrape time -- roughly the size HN was
+rendering when dang took the baseline numbers above).
+
+**Method:** browser page load, 10 successive measurements each.
+Times in milliseconds.
+
+| viewer       | n  | min | median | mean  | max |
+|---           |---:|---: |---:    |---:   |---: |
+| logged-in    | 10 | 369 | 383    | 381.7 | 391 |
+| logged-out   | 10 | 320 | 329    | 328.7 | 337 |
+
+Raw:
+
+```
+logged-in:  376 391 389 390 381 376 385 388 372 369
+logged-out: 333 320 329 337 331 326 326 324 329 332
+```
+
+### Comparison vs HN, like-for-like
+
+Now that our snapshot has ~934 comments and HN's baseline above
+was ~979, the corpora are about the same size.
+
+| viewer       | local median | HN median | local / HN |
+|---           |---:          |---:       |---:        |
+| logged-in    | 383          | 82        | **~4.7x slower** |
+| logged-out   | 329          | 65.5      | **~5.0x slower** |
+
+A larger gap than the previous entry showed (~2x on the smaller
+corpus).  Suggests rendering on our side scales worse than linearly
+with comment count -- ~1.5x more comments (632 -> 934) produced
+~2.3x more render time (166 -> 383 ms logged-in).  The HN baseline
+above shows HN doesn't have the same scaling problem on its end
+(its medians were already comparable at ~979 comments).

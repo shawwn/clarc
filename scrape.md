@@ -225,6 +225,20 @@ PASS 48085067 in 48073201 dead= flagged= collapsed=T
 | `(parse-item-page html)`            | offline: parse a saved HTML string               |
 | `(fetch-top-stories)`               | just the API id list                             |
 
+# TODO
+
+- **Scrape arbitrary item ids, not just front-page.**  Right now
+  `(scrape!)` is the only orchestration that successfully imports
+  items and their associated users -- it walks `topstories.json`
+  and then `scrape-users-parallel!` mops up authors at the end.
+  `(scrape-item! id)` works on its own but doesn't drive a user
+  fetch, so users discovered in the item don't get profiles.
+  Want a `(scrape-items! '(id1 id2 ...))` that takes a list,
+  scrapes each item (with the existing crawl-delay), then runs
+  `scrape-users-parallel!` over the accumulated authors -- so we
+  can refresh a specific thread or backfill a list of ids without
+  touching the front page.
+
 # Implementation notes
 
 - `pipe-from` (in `arc0.lisp`) is configured for `:latin-1` so curl's
