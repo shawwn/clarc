@@ -18,8 +18,9 @@ Each entry should record:
 
 ## 2026-05-13 -- item page, 632 comments, logged-in vs logged-out
 
-**Page:** local mirror of `item?id=48100433` (HN snapshot at 593 points,
-632 comments at scrape time).
+**Page:** local mirror of
+[`item?id=48100433`](https://news.ycombinator.com/item?id=48100433)
+(HN snapshot at 593 points, 632 comments at scrape time).
 
 **Hardware:** Apple M2 Max laptop.
 
@@ -90,9 +91,11 @@ go under the next entry below.
 
 ## 2026-05-13 -- same item, re-scraped at 934 comments
 
-**Page:** local mirror of `item?id=48100433`, after re-scraping
-(883 points, 934 comments at scrape time -- roughly the size HN was
-rendering when dang took the baseline numbers above).
+**Page:** local mirror of
+[`item?id=48100433`](https://news.ycombinator.com/item?id=48100433),
+after re-scraping (883 points, 934 comments at scrape time --
+roughly the size HN was rendering when dang took the baseline
+numbers above).
 
 **Hardware:** Apple M2 Max laptop (same machine as the previous entry).
 
