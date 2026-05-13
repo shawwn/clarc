@@ -374,6 +374,7 @@
 (def cansee (i (t user me))
   (if i!deleted   (admin user)
       i!dead      (or (author i user) (seesdead user))
+      (flagged i) (or (author i user) (seesdead user))
       (delayed i) (author i user)
       t))
 
@@ -1017,9 +1018,13 @@ function vote(node) {
       (pr s!title))))
       
 (def pseudo-text (i)
-  (if i!deleted "[deleted]" "[dead]"))
+  (if (flagged i) "[flagged]"
+      i!deleted   "[deleted]"
+                  "[dead]"))
 
 (def deadmark (i)
+  (when (and (flagged i) (seesdead))
+    (pr " [flagged] "))
   (when (and i!dead (seesdead))
     (pr " [dead] "))
   (when (and i!deleted (admin))
@@ -1196,7 +1201,7 @@ function vote(node) {
 
 ; reset later
 
-(= flag-threshold* 30 flag-kill-threshold* 7 many-flags* 1)
+(= flag-threshold* 0 flag-kill-threshold* 0 many-flags* 0)
 
 ; Un-flagging something doesn't unkill it, if it's now no longer
 ; over flag-kill-threshold.  Ok, since arbitrary threshold anyway.
@@ -1206,14 +1211,20 @@ function vote(node) {
              (~me i!by)
              (or (admin) (> (karma) flag-threshold*)))
     (pr bar*)
-    (w/rlink (do (togglemem (me) i!flags)
-                 (when (and (~mem 'nokill i!keys)
+    (w/rlink (do (if (admin)
+                     (togglemem 'flagged i!keys)
+                     (togglemem (me) i!flags))
+                 (save-item i)
+                 (when (and (~admin)
+                            (~mem 'nokill i!keys)
                             (len> i!flags flag-kill-threshold*)
                             (< (realscore i) 10)
                             (~find admin:!2 i!vote))
+                   (pushnew 'flagged i!keys)
                    (kill i 'flags))
                  whence)
-      (pr "@(if (mem (me) i!flags) 'un)flag"))
+      (let flag (if (admin) (flagged i) (mem (me) i!flags))
+        (pr "@(if flag 'un)flag")))
     (when (and (admin) (len> i!flags many-flags*))
       (pr bar* (plural (len i!flags) "flag") " ")
       (w/rlink (do (togglemem 'nokill i!keys)
@@ -2539,13 +2550,15 @@ first asterisk isn't whitespace.
 
 
 (edop flagged ()
-  (display-selected-items [retrieve maxend* flagged _] "flagged"))
+  (display-selected-items [retrieve maxend* flagging _] "flagged"))
 
 (def flagged (i) 
-  (and (live i)
-       (~mem 'nokill i!keys)
-       (len> i!flags many-flags*)))
+  (mem 'flagged i!keys))
 
+(def flagging (i)
+  (and (~mem 'nokill i!keys)
+       (or (flagged i)
+           (len> i!flags many-flags*))))
 
 (edop killed ()
   (display-selected-items [retrieve maxend* !dead _] "killed"))
