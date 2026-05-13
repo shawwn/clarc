@@ -454,14 +454,15 @@
                  (admin-bar (- (msec) ,gt) ,whence)))))))
 
 (def admin-bar (elapsed whence)
-  (when (admin)
+  (when (or (admin) arg!perf)
     (br2)
     (w/bars
       (pr (len items*) "/" maxid* " loaded")
       (pr (round (/ (memory) 1000000)) " mb")
       (pr elapsed " msec")
-      (link "settings" "newsadmin")
-      (hook 'admin-bar whence))))
+      (when (admin)
+        (link "settings" "newsadmin")
+        (hook 'admin-bar whence)))))
 
 (def color-stripe (c)
   (tag (table width "100%" cellspacing 0 cellpadding 1)
