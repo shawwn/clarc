@@ -386,7 +386,7 @@
                  nil)))))
 
 (def seesdead ((t user me))
-  (or (and user (uvar user showdead) (no (ignored user)))
+  (or (and user (uvar user showdead))
       (editor user)))
 
 (def visible (is (t user me))
