@@ -621,7 +621,7 @@
 ; current scrape.json so the value matches the account that fetched
 ; the page.  Defaults to 'hnscraper for direct callers of
 ; `import-scraped-comment`.
-(= scrape-flagger* 'hnscraper)
+(= scrape-flagger* "hnscraper")
 
 ; Shared dev password installed on every imported user that has no
 ; entry in hpasswords*.  Read from scrape.json's "dev-password" field,
@@ -638,14 +638,9 @@
   ; installing dev passwords below.
   (load-userinfo)
   (with (cfg (load-scrape-config))
-    (= scrape-flagger* (sym (or cfg!username "hnscraper")))
+    (= scrape-flagger* (or cfg!username "hnscraper"))
     (when (isa cfg!dev-password 'string)
       (= scrape-dev-password* cfg!dev-password)))
-  ; news's `(flagged i)` requires `(len> i!flags many-flags*)`.  With
-  ; many-flags* = 1 (the default), two flaggers are needed.  Since the
-  ; scraper account is our only flagger, drop the threshold to 0 so a
-  ; single flag is enough.
-  (= many-flags* 0)
   (let ranked nil
     ; users first (so items have authors)
     (each f (dir scrape-user-dir*)
@@ -721,13 +716,6 @@
       (save-item it)
       it)))
 
-; news's (flagged i) requires (len> i!flags many-flags*).  We're the
-; only flagger we know about, so we record the scraper username
-; (many-flags* + 1) times -- enough to clear the threshold regardless
-; of what many-flags* happens to be set to.
-(def scrape-flag-list ()
-  (n-of (+ (or many-flags* 1) 1) scrape-flagger*))
-
 (def import-scraped-comment (c)
   (let id c!id
     (let it (or (items* id)
@@ -744,16 +732,16 @@
                          ; right baseline.
                          'score 1
                          'dead  c!dead
-                         'flags (if c!flagged (scrape-flag-list) nil)
                          'deleted c!deleted)))
       (when (> id maxid*) (= maxid* id))
       (= it!text (or c!text it!text))
       (= it!by   (or c!by   it!by))
       (= it!dead (or c!dead it!dead))
       ; if newly observed as [flagged] and the scraper isn't already
-      ; on the flag list, install the (many-flags* + 1)-long marker.
-      (when (and c!flagged (no (mem scrape-flagger* it!flags)))
-        (= it!flags (scrape-flag-list)))
+      ; on the flag list, add it.
+      (when c!flagged
+        (pushnew 'flagged it!keys)
+        (pushnew scrape-flagger* it!flags))
       ; link this comment under its parent's kids list.  Without this
       ; an item page renders the story but no comments -- news.arc's
       ; display-subcomments walks parent!kids, not (keep [is _!parent
