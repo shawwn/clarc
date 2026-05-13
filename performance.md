@@ -10,6 +10,7 @@ Each entry should record:
 
 - date, and ideally the commit (`git rev-parse HEAD`) it was measured against
 - what page was loaded and against what corpus snapshot
+- the hardware (CPU + machine class), since numbers move with the host
 - how the timings were collected (browser dev tools, `curl -w '%{time_total}'`, ...)
 - raw numbers (so future entries can compare apples to apples)
 
@@ -19,6 +20,8 @@ Each entry should record:
 
 **Page:** local mirror of `item?id=48100433` (HN snapshot at 593 points,
 632 comments at scrape time).
+
+**Hardware:** Apple M2 Max laptop.
 
 **Method:** browser page load, 10 successive measurements each.  Times
 in milliseconds.
@@ -91,6 +94,8 @@ go under the next entry below.
 **Page:** local mirror of `item?id=48100433`, after re-scraping
 (883 points, 934 comments at scrape time -- roughly the size HN was
 rendering when dang took the baseline numbers above).
+
+**Hardware:** Apple M2 Max laptop (same machine as the previous entry).
 
 **Method:** browser page load, 10 successive measurements each.
 Times in milliseconds.
