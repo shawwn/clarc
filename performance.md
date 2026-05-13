@@ -48,8 +48,7 @@ showdead-gated markers, threads-link header).
 
 Numbers from dang (HN admin, over email) for the last-10 server-side
 render times of the same item.  By that time the thread had grown to
-roughly 979 comments / 879 points (about 20% more content than the
-local snapshot above), so HN is producing more output in less time.
+roughly ~850 comments, so HN is producing more output in less time.
 
 | viewer       | n  | min | median | mean  | max | notes |
 |---           |---:|---: |---:    |---:   |---: |---    |
