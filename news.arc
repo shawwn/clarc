@@ -1864,7 +1864,6 @@ function vote(node) {
          t-sub 0
          n-printed-0 comments-printed*
          hits-0 cc-hits* misses-0 cc-misses*
-         t-gen-0 t-gen-msec* t-cache-0 t-cache-msec*
          t-sort-0 t-sort-msec*
          page-cache-hit nil)
     (longpage (msec) nil nil title here
@@ -1892,8 +1891,6 @@ function vote(node) {
         (w/bars
           (pr "subcomments: " t-sub " msec")
           (pr "page-cache: " (if page-cache-hit "hit" "miss"))
-          (pr "gen: " (- t-gen-msec* t-gen-0) " msec")
-          (pr "cache: " (- t-cache-msec* t-cache-0) " msec")
           (pr "sort: " (- t-sort-msec* t-sort-0) " msec")
           (pr "comments: " (- comments-printed* n-printed-0))
           (pr "cc hits: " (- cc-hits* hits-0))

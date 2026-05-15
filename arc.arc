@@ -656,11 +656,11 @@
 ; the rep of these.  That would also require hacking the reader.  
 
 (def pr args
-  (map1 disp args)
+  (each x args (disp x))
   (car args))
 
 (def prt args
-  (map1 [if _ (disp _)] args)
+  (each x args (if x (disp x)))
   (car args))
 
 (def prn args
