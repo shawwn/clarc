@@ -805,6 +805,65 @@
       (push (subseq s start len) result))
     (nreverse result)))
 
+; Native: emit a raw cached-chunks string to *standard-output*,
+; substituting per-marker HTML for a logged-in viewer. For each
+; marker:
+;   - if its id is in voted-tbl, write voted-html
+;   - else if author-tbl[id] = me, write author-html
+;   - else write pre-tbl[id] + me + "&auth=" + cook + suf-tbl[id]
+; Equivalent to (each c chunks ...) in arc, but stays in CL across the
+; whole walk; saves a few ms per render on a 1k-comment page by
+; avoiding ~5k arc-level disp dispatches.
+(xdef emit-cached-loggedin-raw
+      (s me cook pre-tbl suf-tbl author-tbl voted-tbl
+         voted-html author-html marker-char)
+  (labels
+      ((str (x) (cond
+                 ((stringp x) x)
+                 ((symbolp x) (symbol-name x))
+                 ((null x) "")
+                 (t (princ-to-string x)))))
+    (let* ((port *standard-output*)
+           (markerc (if (characterp marker-char)
+                        marker-char
+                        (code-char marker-char)))
+           (me-str (str me))
+           (cook-str (str cook))
+           (start 0)
+           (len (length s))
+           (i 0))
+      (loop while (< i len) do
+        (cond
+          ((char= (aref s i) markerc)
+           (write-sequence s port :start start :end i)
+           (let ((j (1+ i)))
+             (loop while (and (< j len)
+                              (not (char= (aref s j) markerc)))
+                   do (incf j))
+             (let ((id (parse-integer s :start (1+ i) :end j)))
+               (cond
+                 ((gethash id voted-tbl)
+                  (write-string voted-html port))
+                 ((let ((by (gethash id author-tbl)))
+                    (and by (string= (str by) me-str)))
+                  (write-string author-html port))
+                 (t
+                  (write-string (str (gethash id pre-tbl)) port)
+                  (write-string me-str port)
+                  (write-string "&auth=" port)
+                  (write-string cook-str port)
+                  (write-string (str (gethash id suf-tbl)) port))))
+             (setf start (1+ j))
+             (setf i start)))
+          (t (incf i))))
+      (when (< start len)
+        (write-sequence s port :start start :end len))
+      (unless *arc-explicit-flush* (force-output port))))
+  nil)
+
+; Native: build a fresh hash table (test = equal, like arc tables).
+(xdef new-eq-table () (make-hash-table :test #'eql :synchronized t))
+
 (xdef trunc (x) (truncate x))
 
 (xdef exact (x) (tnil (and (integerp x) (= x (truncate x)))))

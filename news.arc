@@ -1836,26 +1836,32 @@ function vote(node) {
 
 (def news-type (i) (and i (in i!type 'story 'comment 'poll 'pollopt)))
 
-; Comments-tree cache. One entry per item, shared across every viewer
-; (logged-out and logged-in alike). The cached value is a list of
-; alternating string-chunks and per-comment markers; at emit time we
-; walk the list, printing chunks verbatim and rendering the markers
-; with the current viewer's by=/auth=/etc. spliced in.
+; Comments-tree cache. Parallel tables, all keyed by item-id:
+;   item-comments-raw*       -> raw HTML with marker bytes around
+;                               each vote-link slot
+;   item-comments-pre*       -> CL eql-hash: comment-id -> pre-html
+;   item-comments-suf*       -> CL eql-hash: comment-id -> suf-html
+;   item-comments-author*    -> CL eql-hash: comment-id -> by-username
+;   item-comments-stamp*     -> (msec) when built
+;   item-comments-key*       -> (cons len-kids score) invalidation key
+;   item-comments-loggedout* -> flat HTML for logged-out viewers,
+;                               materialised on first logged-out hit
 ;
-; Admin and editor still bypass the cache because their HTML carries
-; extra kill/blast/delete/flag links that change with item state in
-; ways the invalidation key doesn't track cheaply.
+; Admin and editor still bypass: their HTML has extra
+; kill/blast/delete/flag links that the invalidation key doesn't
+; track cheaply.
 ;
-; Memory is bounded by (popular_items * ~1MB) rather than
-; (popular_items * users * 1MB), which matters at HN scale.
+; Memory is bounded by (popular_items * ~2.5MB) -- the raw string
+; plus the lookup tables plus the loggedout-html string. It does NOT
+; scale with the number of viewers, which is the property that makes
+; this workable at HN scale.
 
-(= item-comments-cache* (table)
-   item-comments-cache-stamp* (table)
-   item-comments-cache-key* (table)
-   ; Lazy: a fully-rendered logged-out HTML string per item. Built on
-   ; the first logged-out hit after a (re)build of item-comments-cache*
-   ; for that item, by walking the chunks once. After that, logged-out
-   ; renders are a single (pr cached-string).
+(= item-comments-raw*       (table)
+   item-comments-pre*       (table)
+   item-comments-suf*       (table)
+   item-comments-author*    (table)
+   item-comments-stamp*     (table)
+   item-comments-key*       (table)
    item-comments-loggedout* (table)
    item-comments-cacheable* t
    item-comments-cache-ttl* 60)
@@ -1873,33 +1879,6 @@ function vote(node) {
 ; can't appear in real HTML text or attribute values.
 (= votelinks-marker* (coerce 1 'char))
 
-(def split-on-marker (s)
-  ; "abc\x01<id>\x01def..." -> ("abc" id "def" id ... "tail")
-  ; Implementation lives in arc0.lisp because an arc-level walk of a
-  ; 1MB string spends most of its time in interpreter overhead, not
-  ; in the per-char comparison itself.
-  (split-on-marker-native s votelinks-marker*))
-
-; Pre-computed string fragments around the user-specific bits in a
-; logged-in vote link, keyed by (comment-id . whence). The full vote
-; link is:
-;   pre + USER + "&auth=" + COOK + suf
-; so emit becomes 5 disp calls per comment instead of votelinks's ~15.
-; Shared across all logged-in viewers (pre/suf don't depend on the
-; user).
-(= vote-link-pre* (table) vote-link-suf* (table))
-
-(def compute-vote-link-parts (id here)
-  (let k (cons id here)
-    (unless (vote-link-pre* k)
-      (let enc (urlencode here)
-        (= (vote-link-pre* k)
-            (string "<center><a id=up_" id " onclick=\"return vote(this)\""
-                    " href=\"vote?for=" id "&dir=up&by=")
-           (vote-link-suf* k)
-            (string "&whence=" enc "\">" up-arrow-img*
-                    "</a><span id=down_" id "></span></center>"))))))
-
 ; Static HTML for the two minor logged-in branches.
 (= votelink-voted-html*
    (string "<center>"
@@ -1910,75 +1889,73 @@ function vote(node) {
            (tostring (out (gentag img src (blank-url) height 1 width votewid*)))
            "</center>"))
 
-(def emit-cached-chunks (chunks whence)
-  (let me-now (me)
-    (if (no me-now)
-        ; Used by render-subcomments only on the first logged-out hit
-        ; (to materialise item-comments-loggedout*); thereafter that
-        ; render-subcomments branch never reaches us. Walk chunks
-        ; calling votelinks live; the result string is cached.
-        (each c chunks
-          (if (isa c 'string) (pr c)
-                              (votelinks (item c) whence t)))
-        (let cook (user->cookie* me-now)
-          (let votes-tbl (votes me-now)
-            (each c chunks
-              (if (isa c 'string)
-                   (pr c)
-                  (votes-tbl c)
-                   (pr votelink-voted-html*)
-                  ; Common case: precomputed pre/suf with by/auth spliced in
-                  (let k (cons c whence)
-                    (unless (vote-link-pre* k) (compute-vote-link-parts c whence))
-                    (if (is ((item c) 'by) me-now)
-                        (pr votelink-author-html*)
-                        (pr (vote-link-pre* k) me-now "&auth=" cook
-                            (vote-link-suf* k)))))))))))
-
-(def render-subcomments (i here)
-  (if (cacheable-subcomments-viewer)
-      (let key (comments-cache-key i)
-        (unless (and (iso (item-comments-cache-key* i!id) key)
-                     (aand (item-comments-cache-stamp* i!id)
-                           (< (- (msec) it)
-                              (* item-comments-cache-ttl* 1000))))
-          ; (Re)build chunks and invalidate the logged-out fast string.
-          (= (item-comments-cache* i!id)     (build-subcomments-chunks i here)
-             (item-comments-cache-stamp* i!id) (msec)
-             (item-comments-cache-key* i!id)   key)
-          (wipe (item-comments-loggedout* i!id)))
-        (if (me)
-            ; Logged-in: walk chunks; per comment we call votelinks
-            ; live so by=/auth=/voted/author state is current.
-            (emit-cached-chunks (item-comments-cache* i!id) here)
-            ; Logged-out: render once into a flat string and cache it;
-            ; thereafter every logged-out hit is a single pr call.
-            (pr (or (item-comments-loggedout* i!id)
-                    (= (item-comments-loggedout* i!id)
-                       (tostring
-                         (emit-cached-chunks (item-comments-cache* i!id)
-                                             here)))))))
-      (tab (display-subcomments i here))))
-
 (= t-fill-render* 0 t-fill-split* 0)
 
-(def build-subcomments-chunks (i here)
-  ; (the building-cache) is read by votelinks; w/the sets it for the
-  ; duration of this call only and restores on exit (including on
-  ; error). Thread-local rather than global because two requests can
-  ; reach this concurrently after a TTL flip.
+(def cache-fresh (id key)
+  (and (iso (item-comments-key* id) key)
+       (aand (item-comments-stamp* id)
+             (< (- (msec) it) (* item-comments-cache-ttl* 1000)))))
+
+(def build-comments-cache (i here key)
+  ; Rebuilds all the cache slots for this item under (the building-
+  ; cache) so votelinks emits markers instead of viewer-specific HTML.
+  ; Thread-local rather than global because two requests can reach
+  ; here concurrently after a TTL flip.
   (w/the building-cache t
-    (with (t0 (msec) raw nil chunks nil)
+    (with (t0 (msec)
+           pre (new-eq-table) suf (new-eq-table) author (new-eq-table)
+           raw nil enc (urlencode here))
       (= raw (tostring (tab (display-subcomments i here))))
       (= t-fill-render* (- (msec) t0))
       (= t0 (msec))
-      (= chunks (split-on-marker raw))
-      ; Pre-warm vote-link-pre*/suf* for every comment so the first
-      ; logged-in request doesn't pay the per-id cost; takes ~ms.
-      (each c chunks
-        (unless (isa c 'string) (compute-vote-link-parts c here)))
+      ; Walk the marker integers once and populate the three lookup
+      ; tables for the logged-in fast emit.
+      (let chunks (split-on-marker-native raw votelinks-marker*)
+        (each c chunks
+          (unless (isa c 'string)
+            (= (pre c) (string "<center><a id=up_" c
+                               " onclick=\"return vote(this)\""
+                               " href=\"vote?for=" c "&dir=up&by=")
+               (suf c) (string "&whence=" enc "\">" up-arrow-img*
+                               "</a><span id=down_" c "></span></center>")
+               (author c) ((item c) 'by)))))
       (= t-fill-split* (- (msec) t0))
-      chunks)))
+      (= (item-comments-raw* i!id)       raw
+         (item-comments-pre* i!id)       pre
+         (item-comments-suf* i!id)       suf
+         (item-comments-author* i!id)    author
+         (item-comments-stamp* i!id)     (msec)
+         (item-comments-key* i!id)       key
+         (item-comments-loggedout* i!id) nil))))
+
+(def build-loggedout-html (id here)
+  ; First logged-out hit after a cache rebuild: walk the raw string,
+  ; substituting logged-out votelinks per marker, and cache the flat
+  ; result so subsequent logged-out hits are a single pr.
+  (let raw (item-comments-raw* id)
+    (= (item-comments-loggedout* id)
+       (tostring
+         (each c (split-on-marker-native raw votelinks-marker*)
+           (if (isa c 'string) (pr c)
+                               (votelinks (item c) here t)))))))
+
+(def render-subcomments (i here)
+  (if (cacheable-subcomments-viewer)
+      (with (id i!id key (comments-cache-key i))
+        (unless (cache-fresh id key)
+          (build-comments-cache i here key))
+        (if (me)
+            ; Logged-in: native walk over the raw string.
+            (emit-cached-loggedin-raw
+              (item-comments-raw* id) (me) (user->cookie* (me))
+              (item-comments-pre* id) (item-comments-suf* id)
+              (item-comments-author* id) (votes (me))
+              votelink-voted-html* votelink-author-html*
+              votelinks-marker*)
+            ; Logged-out: flat-string cache, built lazily.
+            (pr (or (item-comments-loggedout* id)
+                    (build-loggedout-html id here)))))
+      (tab (display-subcomments i here))))
 
 (def item-page (i)
   (with (title (and (cansee i)
@@ -2004,7 +1981,7 @@ function vote(node) {
         (let t0 (msec)
           (= page-cache-hit
              (and (cacheable-subcomments-viewer)
-                  (iso (item-comments-cache-key* i!id)
+                  (iso (item-comments-key* i!id)
                        (comments-cache-key i))))
           (render-subcomments i here)
           (= t-sub (- (msec) t0)))
