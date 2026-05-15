@@ -2142,8 +2142,7 @@ function vote(node) {
 
 (= comment-cache* (table) comment-cache-timeout* (table) cc-window* 100000000)
 
-(= comments-printed* 0 cc-hits* 0 cc-misses* 0
-   t-gen-msec* 0 t-cache-msec* 0)
+(= comments-printed* 0 cc-hits* 0 cc-misses* 0)
 
 (= comment-caching* t) 
 
